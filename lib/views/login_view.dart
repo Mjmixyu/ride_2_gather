@@ -13,6 +13,7 @@ class LoginView extends StatefulWidget {
   State<LoginView> createState() => _LoginViewState();
 }
 
+//state of the login - creates the necessary controllers
 class _LoginViewState extends State<LoginView> {
   TextEditingController nameController = TextEditingController();
   TextEditingController emailController = TextEditingController();
@@ -50,7 +51,7 @@ class _LoginViewState extends State<LoginView> {
     );
   }
 
-  /// For large screens
+  //large screen sizing
   Widget _buildLargeScreen(
     Size size,
     SimpleUIController simpleUIController,
@@ -81,7 +82,7 @@ class _LoginViewState extends State<LoginView> {
     );
   }
 
-  /// For Small screens
+  //small screen sizing
   Widget _buildSmallScreen(
     Size size,
     SimpleUIController simpleUIController,
@@ -94,7 +95,7 @@ class _LoginViewState extends State<LoginView> {
     );
   }
 
-  /// Main Body
+  //main body
   Widget _buildMainBody(
     Size size,
     SimpleUIController simpleUIController,
@@ -141,7 +142,7 @@ class _LoginViewState extends State<LoginView> {
             key: _formKey,
             child: Column(
               children: [
-                /// username or Gmail
+                //username or gmail
                 TextFormField(
                   style: kTextFormFieldStyle(),
                   decoration: const InputDecoration(
@@ -152,45 +153,19 @@ class _LoginViewState extends State<LoginView> {
                     ),
                   ),
                   controller: nameController,
-                  // The validator receives the text that the user has entered.
+                  //the validator receives the text that the user has entered
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter username';
-                    } else if (value.length < 4) {
-                      return 'at least enter 4 characters';
-                    } else if (value.length > 13) {
-                      return 'maximum character is 13';
                     }
                     return null;
                   },
                 ),
-                // SizedBox(
-                //   height: size.height * 0.02,
-                // ),
-                // TextFormField(
-                //   controller: emailController,
-                //   decoration: const InputDecoration(
-                //     prefixIcon: Icon(Icons.email_rounded),
-                //     hintText: 'gmail',
-                //     border: OutlineInputBorder(
-                //       borderRadius: BorderRadius.all(Radius.circular(15)),
-                //     ),
-                //   ),
-                //   // The validator receives the text that the user has entered.
-                //   validator: (value) {
-                //     if (value == null || value.isEmpty) {
-                //       return 'Please enter gmail';
-                //     } else if (!value.endsWith('@gmail.com')) {
-                //       return 'please enter valid gmail';
-                //     }
-                //     return null;
-                //   },
-                // ),
                 SizedBox(
                   height: size.height * 0.02,
                 ),
 
-                /// password
+                //password
                 Obx(
                   () => TextFormField(
                     style: kTextFormFieldStyle(),
@@ -213,14 +188,12 @@ class _LoginViewState extends State<LoginView> {
                         borderRadius: BorderRadius.all(Radius.circular(15)),
                       ),
                     ),
-                    // The validator receives the text that the user has entered.
+                    //the validator receives the text that the user has entered
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please enter some text';
                       } else if (value.length < 7) {
                         return 'at least enter 6 characters';
-                      } else if (value.length > 13) {
-                        return 'maximum character is 13';
                       }
                       return null;
                     },
@@ -238,13 +211,13 @@ class _LoginViewState extends State<LoginView> {
                   height: size.height * 0.02,
                 ),
 
-                /// Login Button
+                // login Button
                 loginButton(),
                 SizedBox(
                   height: size.height * 0.03,
                 ),
 
-                /// Navigate To Login Screen
+                //navigate To Login Screen
                 GestureDetector(
                   onTap: () {
                     Navigator.pop(context);
@@ -277,7 +250,7 @@ class _LoginViewState extends State<LoginView> {
     );
   }
 
-  // Login Button
+  //login Button
   Widget loginButton() {
     return SizedBox(
       width: double.infinity,
@@ -292,9 +265,8 @@ class _LoginViewState extends State<LoginView> {
           ),
         ),
         onPressed: () {
-          // Validate returns true if the form is valid, or false otherwise.
+          //validate returns true if the form is valid, or false otherwise
           if (_formKey.currentState!.validate()) {
-            // ... Navigate To your Home Page
           }
         },
         child: const Text('Login'),
