@@ -71,7 +71,7 @@ class UserProfilePage extends StatelessWidget {
 
                 const SizedBox(height: 12),
 
-                //b placeholder
+                //bike placeholder
                 Center(
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 16),

@@ -9,6 +9,8 @@ import '../constants.dart';
 import '../controller/simple_ui_controller.dart';
 import '../core/homeFeed_routing.dart';
 
+import 'package:ride2gather/core/auth_api.dart';
+
 class SignUpView extends StatefulWidget {
   const SignUpView({Key? key}) : super(key: key);
 
@@ -22,6 +24,7 @@ class _SignUpViewState extends State<SignUpView> {
   TextEditingController passwordController = TextEditingController();
 
   final _formKey = GlobalKey<FormState>();
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -275,6 +278,7 @@ class _SignUpViewState extends State<SignUpView> {
 
   //signUp Button
   Widget signUpButton(ThemeData theme) {
+
     return SizedBox(
       width: double.infinity,
       height: 55,
@@ -287,19 +291,64 @@ class _SignUpViewState extends State<SignUpView> {
             ),
           ),
         ),
-        onPressed: () {
-          if (_formKey.currentState!.validate()) {
-            final username = nameController.text.trim();
 
-            Navigator.pushReplacement(
-              context,
-              CupertinoPageRoute(
-                builder: (ctx) => HomeFeed(username: username),
-              ),
+        onPressed: _loading ? null : () async {
+
+          if (!_formKey.currentState!.validate()) return;
+
+          final username = nameController.text.trim();
+          final email = emailController.text.trim();
+          final password = passwordController.text;
+          setState(() => _loading = true);
+
+          try {
+            final result = await AuthApi.signup(
+              email: email,
+              username: username,
+              password: password,
             );
+
+            if (result['ok'] == true) {
+
+              // success -> go to HomeFeed (or Login)
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Account created!')),
+                );
+                Navigator.pushReplacement(
+                  context,
+                  CupertinoPageRoute(builder: (ctx) => HomeFeed(username: username)),
+                );
+              }
+
+            } else {
+              final err = (result['error'] ?? 'Signup failed').toString();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(err)),
+                );
+              }
+            }
+
+          } catch (e) {
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Network error: $e')),
+              );
+            }
+          } finally {
+            if (mounted) setState(() => _loading = false);
           }
         },
-        child: const Text('Sign up'),
+
+        child: _loading
+            ? const SizedBox(
+          height: 22,
+          width: 22,
+          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+        )
+            : const Text('Sign up'),
       ),
     );
   }

@@ -13,6 +13,7 @@ dependencies:
     sdk: flutter
   mysql_client: ^0.0.27
   crypto: ^3.0.3
+  http: ^1.2.2
 
   cupertino_icons: ^1.0.2
   get: ^4.6.5
