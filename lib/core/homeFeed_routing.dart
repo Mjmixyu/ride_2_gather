@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import '../views/add_post_view.dart';
 import '../views/feed_view.dart';
+import '../views/firends_chat_view.dart';
 import '../views/userProfile_view.dart';
+import '../views/map_view.dart';
 
 class HomeFeed extends StatefulWidget {
   final String username;
@@ -13,7 +16,6 @@ class HomeFeed extends StatefulWidget {
 
 class _HomeFeedState extends State<HomeFeed> {
   int _selectedIndex = 0;
-  bool _showUserProfile = false;
 
   late final List<Widget> _pages;
 
@@ -21,61 +23,43 @@ class _HomeFeedState extends State<HomeFeed> {
   void initState() {
     super.initState();
     _pages = [
-      FeedView(onProfileTap: _openUserProfile, username: widget.username),
-      const Center(child: Text("Map Page", style: TextStyle(fontSize: 24))),
-      const Center(child: Text("Chats Page", style: TextStyle(fontSize: 24))),
-      const Center(child: Text("Posts Page", style: TextStyle(fontSize: 24))), // legacy
+      FeedView(onProfileTap: _onProfileNav, username: widget.username),
+      MapView(),
+      AddPostView(),
+      FriendsChatView(),
+      UserProfilePage(username: widget.username),
     ];
   }
 
-  //this function calls the openUser and highlights the tab in the bottom nav bar
-  void _openUserProfile() {
+  void _onProfileNav() {
     setState(() {
-      _showUserProfile = true;
-      _selectedIndex = 3;
+      _selectedIndex = 4; // Profile tab index
     });
   }
 
-  //this function lets the user return to the home feed once in th user profile
   void _onItemTapped(int index) {
     setState(() {
-      if (_showUserProfile && index == 0) {
-        _showUserProfile = false;
-        _selectedIndex = 0;
-        return;
-      }
-
       _selectedIndex = index;
     });
   }
 
-  //this function changes the bottom navbar tab "posts" to "profile" when the user is on his profile
   @override
   Widget build(BuildContext context) {
-    final items = _showUserProfile
-        ? [
-      const BottomNavigationBarItem(icon: Icon(Icons.home), label: "Feed"),
-      const BottomNavigationBarItem(icon: Icon(Icons.map), label: "Map"),
-      const BottomNavigationBarItem(icon: Icon(Icons.chat), label: "Chats"),
-      const BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
-    ]
-        : [
-      const BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
-      const BottomNavigationBarItem(icon: Icon(Icons.map), label: "Map"),
-      const BottomNavigationBarItem(icon: Icon(Icons.chat), label: "Chats"),
-      const BottomNavigationBarItem(icon: Icon(Icons.add_a_photo), label: "Post"),
-    ];
-
     return Scaffold(
-      body: _showUserProfile
-          ? UserProfilePage(username: widget.username)
-          : _pages[_selectedIndex],
+      body: _pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         selectedItemColor: Colors.deepPurpleAccent,
         unselectedItemColor: Colors.grey,
-        items: items,
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: "HomeFeed"),
+          BottomNavigationBarItem(icon: Icon(Icons.map), label: "Map"),
+          BottomNavigationBarItem(icon: Icon(Icons.add_box), label: "Add Post"),
+          BottomNavigationBarItem(icon: Icon(Icons.chat), label: "Friends/Chat"),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: "UserProfile"),
+        ],
       ),
     );
   }

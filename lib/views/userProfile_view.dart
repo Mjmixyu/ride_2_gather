@@ -6,14 +6,14 @@ class UserProfilePage extends StatelessWidget {
 
   UserProfilePage({super.key, required this.username, this.bio = "stuff abt me"});
 
-  //example posts list
+  // Example posts list
   final List<String> posts = List.generate(12, (i) => "post_$i");
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        //profile picture
+        // Profile picture
         Container(
           height: 220,
           width: double.infinity,
@@ -21,7 +21,7 @@ class UserProfilePage extends StatelessWidget {
           child: const Icon(Icons.person, size: 100, color: Colors.white),
         ),
 
-        //blue section
+        // Blue section
         Expanded(
           child: Container(
             width: double.infinity,
@@ -35,7 +35,7 @@ class UserProfilePage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                //username + follow button
+                // Username + follow button
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
@@ -60,7 +60,7 @@ class UserProfilePage extends StatelessWidget {
                   ),
                 ),
 
-                //bio
+                // Bio
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
@@ -71,7 +71,7 @@ class UserProfilePage extends StatelessWidget {
 
                 const SizedBox(height: 12),
 
-                //bike placeholder
+                // Bike placeholder
                 Center(
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -87,51 +87,27 @@ class UserProfilePage extends StatelessWidget {
 
                 const SizedBox(height: 12),
 
-                //posts grid + add button
+                // Posts grid
                 Expanded(
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: GridView.builder(
-                          padding: const EdgeInsets.all(8),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            crossAxisSpacing: 6,
-                            mainAxisSpacing: 6,
-                          ),
-                          itemCount: posts.length,
-                          itemBuilder: (context, index) {
-                            return Container(
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade400,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(Icons.image, color: Colors.white),
-                            );
-                          },
+                  child: GridView.builder(
+                    padding: const EdgeInsets.all(8),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      crossAxisSpacing: 6,
+                      mainAxisSpacing: 6,
+                    ),
+                    itemCount: posts.length,
+                    itemBuilder: (context, index) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade400,
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: GestureDetector(
-                          onTap: () {
-                            //add post logic (after signup fix)
-                          },
-                          child: Container(
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: Colors.blueAccent,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Center(
-                              child: Icon(Icons.add, color: Colors.white),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                        child: const Icon(Icons.image, color: Colors.white),
+                      );
+                    },
                   ),
-                )
+                ),
               ],
             ),
           ),
