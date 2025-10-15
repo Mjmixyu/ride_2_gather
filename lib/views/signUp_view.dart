@@ -1,15 +1,10 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-
 import 'package:get/get.dart';
-import 'package:lottie/lottie.dart';
-
-import '../views/login_view.dart';
-import '../constants.dart';
 import '../controller/simple_ui_controller.dart';
+import '../theme/auth_theme.dart';
+import '../core/auth_api.dart';
 import '../core/homeFeed_routing.dart';
-
-import 'package:ride2gather/core/auth_api.dart';
+import 'login_view.dart';
 
 class SignUpView extends StatefulWidget {
   const SignUpView({Key? key}) : super(key: key);
@@ -19,10 +14,9 @@ class SignUpView extends StatefulWidget {
 }
 
 class _SignUpViewState extends State<SignUpView> {
-  TextEditingController nameController = TextEditingController();
-  TextEditingController emailController = TextEditingController();
-  TextEditingController passwordController = TextEditingController();
-
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _loading = false;
 
@@ -34,323 +28,260 @@ class _SignUpViewState extends State<SignUpView> {
     super.dispose();
   }
 
-  SimpleUIController simpleUIController = Get.put(SimpleUIController());
-
   @override
   Widget build(BuildContext context) {
-    var size = MediaQuery.of(context).size;
-    var theme = Theme.of(context);
+    final SimpleUIController simpleUIController = Get.put(SimpleUIController());
 
-    return GestureDetector(
-      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-      child: Scaffold(
-          backgroundColor: Colors.white,
-          resizeToAvoidBottomInset: false,
-          body: LayoutBuilder(
-            builder: (context, constraints) {
-              if (constraints.maxWidth > 600) {
-                return _buildLargeScreen(size, simpleUIController, theme);
-              } else {
-                return _buildSmallScreen(size, simpleUIController, theme);
-              }
-            },
-          )),
-    );
-  }
-
-  //large screen sizing
-  Widget _buildLargeScreen(
-      Size size, SimpleUIController simpleUIController, ThemeData theme) {
-    return Row(
-      children: [
-        Expanded(
-          flex: 4,
-          child: RotatedBox(
-            quarterTurns: 3,
-            child: Lottie.asset(
-              'assets/coin.json',
-              height: size.height * 0.3,
-              width: double.infinity,
-              fit: BoxFit.fill,
-            ),
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF001AFF),
+              Color(0xFF020310),
+              Color(0xFF0A0B2E),
+            ],
           ),
         ),
-        SizedBox(width: size.width * 0.06),
-        Expanded(
-          flex: 5,
-          child: _buildMainBody(size, simpleUIController, theme),
-        ),
-      ],
-    );
-  }
-
-  //small screen sizing
-  Widget _buildSmallScreen(
-      Size size, SimpleUIController simpleUIController, ThemeData theme) {
-    return Center(
-      child: _buildMainBody(size, simpleUIController, theme),
-    );
-  }
-
-  //main body
-  Widget _buildMainBody(
-      Size size, SimpleUIController simpleUIController, ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment:
-          size.width > 600 ? MainAxisAlignment.center : MainAxisAlignment.start,
-      children: [
-        size.width > 600
-            ? Container()
-            : Lottie.asset(
-                'assets/wave.json',
-                height: size.height * 0.2,
-                width: size.width,
-                fit: BoxFit.fill,
-              ),
-        SizedBox(
-          height: size.height * 0.03,
-        ),
-        Padding(
-          padding: const EdgeInsets.only(left: 20.0),
-          child: Text(
-            'Sign Up',
-            style: kLoginTitleStyle(size),
-          ),
-        ),
-        const SizedBox(
-          height: 10,
-        ),
-        Padding(
-          padding: const EdgeInsets.only(left: 20.0),
-          child: Text(
-            'Create Account',
-            style: kLoginSubtitleStyle(size),
-          ),
-        ),
-        SizedBox(
-          height: size.height * 0.03,
-        ),
-        Padding(
-          padding: const EdgeInsets.only(left: 20.0, right: 20),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                /// username
-                TextFormField(
-                  style: kTextFormFieldStyle(),
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.person),
-                    hintText: 'Username',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(15)),
-                    ),
-                  ),
-
-                  controller: nameController,
-                  //the validator receives the text that the user has entered
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter username';
-                    } else if (value.length < 4) {
-                      return 'at least enter 4 characters';
-                    } else if (value.length > 13) {
-                      return 'maximum character is 13';
-                    }
-                    return null;
-                  },
-                ),
-                SizedBox(
-                  height: size.height * 0.02,
-                ),
-
-                //email
-                TextFormField(
-                  style: kTextFormFieldStyle(),
-                  controller: emailController,
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.email_rounded),
-                    hintText: 'gmail',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(15)),
-                    ),
-                  ),
-                  //the validator receives the text that the user has entered
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter an email address';
-                    } else if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                      return 'Please enter a valid email address';
-                    }
-                    return null;
-                  },
-                ),
-                SizedBox(
-                  height: size.height * 0.02,
-                ),
-
-                //password
-                Obx(
-                  () => TextFormField(
-                    style: kTextFormFieldStyle(),
-                    controller: passwordController,
-                    obscureText: simpleUIController.isObscure.value,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.lock_open),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          simpleUIController.isObscure.value
-                              ? Icons.visibility
-                              : Icons.visibility_off,
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // ✅ Logo
+                    Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(60),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.4),
+                            blurRadius: 10,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(60),
+                        child: Image.asset(
+                          'assets/images/logo.png',
+                          fit: BoxFit.cover,
                         ),
-                        onPressed: () {
-                          simpleUIController.isObscureActive();
-                        },
-                      ),
-                      hintText: 'Password',
-                      border: const OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(15)),
                       ),
                     ),
-                    //the validator receives the text that the user has entered
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter some text';
-                      } else if (value.length < 7) {
-                        return 'at least enter 6 characters';
-                      }
-                      return null;
-                    },
-                  ),
-                ),
-                SizedBox(
-                  height: size.height * 0.01,
-                ),
-                Text(
-                  'Creating an account means you\'re okay with our Terms of Services and our Privacy Policy',
-                  style: kLoginTermsAndPrivacyStyle(size),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(
-                  height: size.height * 0.02,
-                ),
 
-                //signUp Button
-                signUpButton(theme),
-                SizedBox(
-                  height: size.height * 0.03,
-                ),
+                    const SizedBox(height: 25),
+                    const Text('Sign Up', style: AuthTheme.titleStyle),
+                    const SizedBox(height: 6),
+                    const Text('Create your account',
+                        style: AuthTheme.subtitleStyle),
+                    const SizedBox(height: 35),
 
-                //navigate To Login Screen
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                        context,
-                        CupertinoPageRoute(
-                            builder: (ctx) => const LoginView()));
-                    nameController.clear();
-                    emailController.clear();
-                    passwordController.clear();
-                    _formKey.currentState?.reset();
+                    // Rounded background container
+                    Container(
+                      padding: const EdgeInsets.all(25),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.35),
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 10,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          // Username
+                          TextFormField(
+                            controller: nameController,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: AuthTheme.textFieldDecoration(
+                              hintText: 'Username',
+                              icon: Icons.person_outline,
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter username';
+                              } else if (value.length < 4) {
+                                return 'At least 4 characters';
+                              } else if (value.length > 13) {
+                                return 'Max 13 characters';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 18),
 
-                    simpleUIController.isObscure.value = true;
-                  },
-                  child: RichText(
-                    text: TextSpan(
-                      text: 'Already have an account?',
-                      style: kHaveAnAccountStyle(size),
-                      children: [
-                        TextSpan(
-                            text: " Login",
-                            style: kLoginOrSignUpTextStyle(size)),
-                      ],
+                          // Email
+                          TextFormField(
+                            controller: emailController,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: AuthTheme.textFieldDecoration(
+                              hintText: 'Email',
+                              icon: Icons.email_outlined,
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter an email';
+                              } else if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                                  .hasMatch(value)) {
+                                return 'Enter a valid email';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 18),
+
+                          // Password
+                          Obx(
+                                () => TextFormField(
+                              controller: passwordController,
+                              style: const TextStyle(color: Colors.white),
+                              obscureText: simpleUIController.isObscure.value,
+                              decoration: AuthTheme.textFieldDecoration(
+                                hintText: 'Password',
+                                icon: Icons.lock_outline,
+                              ).copyWith(
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    simpleUIController.isObscure.value
+                                        ? Icons.visibility
+                                        : Icons.visibility_off,
+                                    color: Colors.white70,
+                                  ),
+                                  onPressed: () =>
+                                      simpleUIController.isObscureActive(),
+                                ),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please enter password';
+                                } else if (value.length < 6) {
+                                  return 'At least 6 characters';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 30),
+
+                          // Sign Up Button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 55,
+                            child: ElevatedButton(
+                              style: AuthTheme.mainButtonStyle,
+                              onPressed: _loading
+                                  ? null
+                                  : () async {
+                                if (!_formKey.currentState!.validate()) return;
+
+                                final username = nameController.text.trim();
+                                final email = emailController.text.trim();
+                                final password = passwordController.text;
+                                setState(() => _loading = true);
+
+                                try {
+                                  final result = await AuthApi.signup(
+                                    email: email,
+                                    username: username,
+                                    password: password,
+                                  );
+
+                                  if (result['ok'] == true) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(const SnackBar(
+                                          content: Text('Account created!')));
+                                      Navigator.pushReplacement(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (ctx) =>
+                                              HomeFeed(username: username),
+                                        ),
+                                      );
+                                    }
+                                  } else {
+                                    final err = (result['error'] ??
+                                        'Signup failed')
+                                        .toString();
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(SnackBar(content: Text(err)));
+                                    }
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Network error: $e')),
+                                    );
+                                  }
+                                } finally {
+                                  if (mounted) setState(() => _loading = false);
+                                }
+                              },
+                              child: _loading
+                                  ? const SizedBox(
+                                height: 22,
+                                width: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                                  : const Text('Sign Up',
+                                  style: TextStyle(
+                                      fontSize: 18, color: Colors.white)),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+
+                    const SizedBox(height: 25),
+
+                    // Navigate to Login
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (ctx) => const LoginView()),
+                        );
+                        nameController.clear();
+                        emailController.clear();
+                        passwordController.clear();
+                        _formKey.currentState?.reset();
+                        simpleUIController.isObscure.value = true;
+                      },
+                      child: RichText(
+                        text: const TextSpan(
+                          text: 'Already have an account? ',
+                          style: TextStyle(color: Colors.white70),
+                          children: [
+                            TextSpan(text: 'Log In', style: AuthTheme.linkStyle),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
-      ],
-    );
-  }
-
-  //signUp Button
-  Widget signUpButton(ThemeData theme) {
-
-    return SizedBox(
-      width: double.infinity,
-      height: 55,
-      child: ElevatedButton(
-        style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.all(Colors.deepPurpleAccent),
-          shape: WidgetStateProperty.all(
-            RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
-          ),
-        ),
-
-        onPressed: _loading ? null : () async {
-
-          if (!_formKey.currentState!.validate()) return;
-
-          final username = nameController.text.trim();
-          final email = emailController.text.trim();
-          final password = passwordController.text;
-          setState(() => _loading = true);
-
-          try {
-            final result = await AuthApi.signup(
-              email: email,
-              username: username,
-              password: password,
-            );
-
-            if (result['ok'] == true) {
-
-              // success -> go to HomeFeed (or Login)
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Account created!')),
-                );
-                Navigator.pushReplacement(
-                  context,
-                  CupertinoPageRoute(builder: (ctx) => HomeFeed(username: username)),
-                );
-              }
-
-            } else {
-              final err = (result['error'] ?? 'Signup failed').toString();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(err)),
-                );
-              }
-            }
-
-          } catch (e) {
-
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Network error: $e')),
-              );
-            }
-          } finally {
-            if (mounted) setState(() => _loading = false);
-          }
-        },
-
-        child: _loading
-            ? const SizedBox(
-          height: 22,
-          width: 22,
-          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-        )
-            : const Text('Sign up'),
       ),
     );
   }
-
 }

@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-
 import 'package:get/get.dart';
-import 'package:lottie/lottie.dart';
-
-import '../constants.dart';
 import '../controller/simple_ui_controller.dart';
+import '../theme/auth_theme.dart';
+import 'signup_view.dart';
 
 class LoginView extends StatefulWidget {
   const LoginView({Key? key}) : super(key: key);
@@ -13,17 +11,13 @@ class LoginView extends StatefulWidget {
   State<LoginView> createState() => _LoginViewState();
 }
 
-//state of the login - creates the necessary controllers
 class _LoginViewState extends State<LoginView> {
-  TextEditingController nameController = TextEditingController();
-  TextEditingController emailController = TextEditingController();
-  TextEditingController passwordController = TextEditingController();
-
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   @override
   void dispose() {
-    nameController.dispose();
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
@@ -31,245 +25,142 @@ class _LoginViewState extends State<LoginView> {
 
   @override
   Widget build(BuildContext context) {
-    var size = MediaQuery.of(context).size;
-    SimpleUIController simpleUIController = Get.find<SimpleUIController>();
-    return GestureDetector(
-      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        resizeToAvoidBottomInset: false,
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxWidth > 600) {
-              return _buildLargeScreen(size, simpleUIController);
-            } else {
-              return _buildSmallScreen(size, simpleUIController);
-            }
-          },
-        ),
-      ),
-    );
-  }
+    final SimpleUIController simpleUIController = Get.put(SimpleUIController());
 
-  //large screen sizing
-  Widget _buildLargeScreen(
-    Size size,
-    SimpleUIController simpleUIController,
-  ) {
-    return Row(
-      children: [
-        Expanded(
-          flex: 4,
-          child: RotatedBox(
-            quarterTurns: 3,
-            child: Lottie.asset(
-              'assets/coin.json',
-              height: size.height * 0.3,
-              width: double.infinity,
-              fit: BoxFit.fill,
-            ),
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF001AFF),
+              Color(0xFF0A0B2E),
+              Color(0xFF020310),
+
+            ],
           ),
         ),
-        SizedBox(width: size.width * 0.06),
-        Expanded(
-          flex: 5,
-          child: _buildMainBody(
-            size,
-            simpleUIController,
-          ),
-        ),
-      ],
-    );
-  }
-
-  //small screen sizing
-  Widget _buildSmallScreen(
-    Size size,
-    SimpleUIController simpleUIController,
-  ) {
-    return Center(
-      child: _buildMainBody(
-        size,
-        simpleUIController,
-      ),
-    );
-  }
-
-  //main body
-  Widget _buildMainBody(
-    Size size,
-    SimpleUIController simpleUIController,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment:
-          size.width > 600 ? MainAxisAlignment.center : MainAxisAlignment.start,
-      children: [
-        size.width > 600
-            ? Container()
-            : Lottie.asset(
-                'assets/wave.json',
-                height: size.height * 0.2,
-                width: size.width,
-                fit: BoxFit.fill,
-              ),
-        SizedBox(
-          height: size.height * 0.03,
-        ),
-        Padding(
-          padding: const EdgeInsets.only(left: 20.0),
-          child: Text(
-            'Login',
-            style: kLoginTitleStyle(size),
-          ),
-        ),
-        const SizedBox(
-          height: 10,
-        ),
-        Padding(
-          padding: const EdgeInsets.only(left: 20.0),
-          child: Text(
-            'Welcome Back Catchy',
-            style: kLoginSubtitleStyle(size),
-          ),
-        ),
-        SizedBox(
-          height: size.height * 0.03,
-        ),
-        Padding(
-          padding: const EdgeInsets.only(left: 20.0, right: 20),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                //username or gmail
-                TextFormField(
-                  style: kTextFormFieldStyle(),
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.person),
-                    hintText: 'Username or Gmail',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(15)),
-                    ),
-                  ),
-                  controller: nameController,
-                  //the validator receives the text that the user has entered
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter username';
-                    }
-                    return null;
-                  },
-                ),
-                SizedBox(
-                  height: size.height * 0.02,
-                ),
-
-                //password
-                Obx(
-                  () => TextFormField(
-                    style: kTextFormFieldStyle(),
-                    controller: passwordController,
-                    obscureText: simpleUIController.isObscure.value,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.lock_open),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          simpleUIController.isObscure.value
-                              ? Icons.visibility
-                              : Icons.visibility_off,
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Logo (rounded)
+                    Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(60),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.4),
+                            blurRadius: 10,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(60),
+                        child: Image.asset(
+                          'assets/images/logo.png',
+                          fit: BoxFit.cover,
                         ),
-                        onPressed: () {
-                          simpleUIController.isObscureActive();
-                        },
-                      ),
-                      hintText: 'Password',
-                      border: const OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(15)),
                       ),
                     ),
-                    //the validator receives the text that the user has entered
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter some text';
-                      } else if (value.length < 7) {
-                        return 'at least enter 6 characters';
-                      }
-                      return null;
-                    },
-                  ),
-                ),
-                SizedBox(
-                  height: size.height * 0.01,
-                ),
-                Text(
-                  'Creating an account means you\'re okay with our Terms of Services and our Privacy Policy',
-                  style: kLoginTermsAndPrivacyStyle(size),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(
-                  height: size.height * 0.02,
-                ),
+                    const SizedBox(height: 25),
 
-                // login Button
-                loginButton(),
-                SizedBox(
-                  height: size.height * 0.03,
-                ),
+                    const Text('Welcome Back', style: AuthTheme.titleStyle),
+                    const SizedBox(height: 6),
+                    const Text('Login to your account',
+                        style: AuthTheme.subtitleStyle),
+                    const SizedBox(height: 35),
 
-                //navigate To Login Screen
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pop(context);
-                    nameController.clear();
-                    emailController.clear();
-                    passwordController.clear();
-                    _formKey.currentState?.reset();
-                    simpleUIController.isObscure.value = true;
-                  },
-                  child: RichText(
-                    text: TextSpan(
-                      text: 'Don\'t have an account?',
-                      style: kHaveAnAccountStyle(size),
-                      children: [
-                        TextSpan(
-                          text: " Sign up",
-                          style: kLoginOrSignUpTextStyle(
-                            size,
+                    // Email
+                    TextFormField(
+                      controller: emailController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: AuthTheme.textFieldDecoration(
+                        hintText: 'Email',
+                        icon: Icons.email_outlined,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Password
+                    Obx(
+                          () => TextFormField(
+                        controller: passwordController,
+                        style: const TextStyle(color: Colors.white),
+                        obscureText: simpleUIController.isObscure.value,
+                        decoration: AuthTheme.textFieldDecoration(
+                          hintText: 'Password',
+                          icon: Icons.lock_outline,
+                        ).copyWith(
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              simpleUIController.isObscure.value
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                              color: Colors.white70,
+                            ),
+                            onPressed: () =>
+                                simpleUIController.isObscureActive(),
                           ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+                    const SizedBox(height: 40),
 
-  //login Button
-  Widget loginButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 55,
-      child: ElevatedButton(
-        style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.all(Colors.deepPurpleAccent),
-          shape: WidgetStateProperty.all(
-            RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
+                    // Login Button (design only)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 55,
+                      child: ElevatedButton(
+                        style: AuthTheme.mainButtonStyle,
+                        onPressed: () {},
+                        child: const Text(
+                          'Log In',
+                          style: TextStyle(fontSize: 18, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+
+                    // Navigation to Sign Up
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (ctx) => const SignUpView()),
+                        );
+                      },
+                      child: RichText(
+                        text: const TextSpan(
+                          text: "Don't have an account? ",
+                          style: TextStyle(color: Colors.white70),
+                          children: [
+                            TextSpan(
+                              text: 'Sign Up',
+                              style: AuthTheme.linkStyle,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
-        onPressed: () {
-          //validate returns true if the form is valid, or false otherwise
-          if (_formKey.currentState!.validate()) {
-          }
-        },
-        child: const Text('Login'),
       ),
     );
   }
