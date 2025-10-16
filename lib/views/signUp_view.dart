@@ -6,6 +6,7 @@ import '../core/auth_api.dart';
 import '../core/homeFeed_routing.dart';
 import 'login_view.dart';
 
+// fyi signup country_code works - have to restart node.js AND GENERALLY PLS ALWAYS START (or automate)
 const List<Map<String, String>> countryList = [
   {"code": "", "name": "Select country (optional)"},
   {"code": "DE", "name": "Germany"},
