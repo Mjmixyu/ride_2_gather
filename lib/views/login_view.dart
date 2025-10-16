@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controller/simple_ui_controller.dart';
 import '../theme/auth_theme.dart';
+import '../core/auth_api.dart';
+import '../core/homeFeed_routing.dart';
 import 'signup_view.dart';
 
 class LoginView extends StatefulWidget {
@@ -12,13 +14,14 @@ class LoginView extends StatefulWidget {
 }
 
 class _LoginViewState extends State<LoginView> {
-  final TextEditingController emailController = TextEditingController();
+  final TextEditingController identityController = TextEditingController(); // username OR email
   final TextEditingController passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _loading = false;
 
   @override
   void dispose() {
-    emailController.dispose();
+    identityController.dispose();
     passwordController.dispose();
     super.dispose();
   }
@@ -39,7 +42,6 @@ class _LoginViewState extends State<LoginView> {
               Color(0xFF001AFF),
               Color(0xFF0A0B2E),
               Color(0xFF020310),
-
             ],
           ),
         ),
@@ -75,24 +77,27 @@ class _LoginViewState extends State<LoginView> {
                       ),
                     ),
                     const SizedBox(height: 25),
-
                     const Text('Welcome Back', style: AuthTheme.titleStyle),
                     const SizedBox(height: 6),
                     const Text('Login to your account',
                         style: AuthTheme.subtitleStyle),
                     const SizedBox(height: 35),
-
-                    // Email
+                    // Identity (username or email)
                     TextFormField(
-                      controller: emailController,
+                      controller: identityController,
                       style: const TextStyle(color: Colors.white),
                       decoration: AuthTheme.textFieldDecoration(
-                        hintText: 'Email',
-                        icon: Icons.email_outlined,
+                        hintText: 'Username or Email',
+                        icon: Icons.person_outline,
                       ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter username or email';
+                        }
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 20),
-
                     // Password
                     Obx(
                           () => TextFormField(
@@ -110,30 +115,80 @@ class _LoginViewState extends State<LoginView> {
                                   : Icons.visibility_off,
                               color: Colors.white70,
                             ),
-                            onPressed: () =>
-                                simpleUIController.isObscureActive(),
+                            onPressed: () => simpleUIController.isObscureActive(),
                           ),
                         ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter password';
+                          }
+                          return null;
+                        },
                       ),
                     ),
                     const SizedBox(height: 40),
-
-                    // Login Button (design only)
                     SizedBox(
                       width: double.infinity,
                       height: 55,
                       child: ElevatedButton(
                         style: AuthTheme.mainButtonStyle,
-                        onPressed: () {},
-                        child: const Text(
+                        onPressed: _loading
+                            ? null
+                            : () async {
+                          if (!_formKey.currentState!.validate()) return;
+                          setState(() => _loading = true);
+                          try {
+                            final result = await AuthApi.login(
+                              identity: identityController.text.trim(),
+                              password: passwordController.text,
+                            );
+                            if (result['ok'] == true) {
+                              final user = result['data'];
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Login successful!')),
+                                );
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (ctx) =>
+                                        HomeFeed(username: user['username']),
+                                  ),
+                                );
+                              }
+                            } else {
+                              final err = (result['error'] ?? 'Login failed').toString();
+                              if (mounted) {
+                                ScaffoldMessenger.of(context)
+                                    .showSnackBar(SnackBar(content: Text(err)));
+                              }
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Network error: $e')),
+                              );
+                            }
+                          } finally {
+                            if (mounted) setState(() => _loading = false);
+                          }
+                        },
+                        child: _loading
+                            ? const SizedBox(
+                          height: 22,
+                          width: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                            : const Text(
                           'Log In',
                           style: TextStyle(fontSize: 18, color: Colors.white),
                         ),
                       ),
                     ),
                     const SizedBox(height: 28),
-
-                    // Navigation to Sign Up
                     GestureDetector(
                       onTap: () {
                         Navigator.push(
