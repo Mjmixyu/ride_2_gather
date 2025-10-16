@@ -24,10 +24,10 @@ app.get('/debug/users', async (_req, res) => {
 
 //signup functionality
 app.post('/signup', async (req, res) => {
-    console.log('SIGNUP BODY:', req.body);  // <-- see what Flutter sends
+    console.log('SIGNUP BODY:', req.body); //debugging purpose
 
     try {
-        const { email, username, password } = req.body || {};
+        const { email, username, password, country_code = "" } = req.body || {};
         //basic validation
         if (!email || !username || !password) {
             return res.status(422).json({ error: 'email, username, and password are required' });
@@ -52,24 +52,18 @@ app.post('/signup', async (req, res) => {
         //hash & create
         const hash = await bcrypt.hash(password, 10);
         const user = await prisma.user.create({
-            data: { email, username, passwordHash: hash }
+            data: { email, username, passwordHash: hash, country_code }
         });
-        return res.status(201).json({ id: user.id, email: user.email, username: user.username });
+        console.log('Created user:', user);
+        return res.status(201).json({ id: user.id, email: user.email, username: user.username, country_code: user.country_code });
 
     } catch (e) {
-        //known Prisma duplicate error
         if (e && e.code === 'P2002') {
             return res.status(409).json({ error: 'email or username already exists' });
         }
-
-        //log everything server-side
         console.error('SIGNUP_ERROR:', e);
-
-        // surface the message to help you debug quickly - will remove comments/functionality like this in future release
         return res.status(500).json({ error: e?.message || 'server error' });
-
     }
-
 });
 
 //log unhandled promise rejections so nothing is swallowed

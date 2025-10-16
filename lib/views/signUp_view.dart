@@ -6,6 +6,15 @@ import '../core/auth_api.dart';
 import '../core/homeFeed_routing.dart';
 import 'login_view.dart';
 
+const List<Map<String, String>> countryList = [
+  {"code": "", "name": "Select country (optional)"},
+  {"code": "DE", "name": "Germany"},
+  {"code": "US", "name": "United States"},
+  {"code": "FR", "name": "France"},
+  {"code": "GB", "name": "United Kingdom"},
+  {"code": "CN", "name": "China"},
+];
+
 class SignUpView extends StatefulWidget {
   const SignUpView({Key? key}) : super(key: key);
 
@@ -19,6 +28,8 @@ class _SignUpViewState extends State<SignUpView> {
   final TextEditingController passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _loading = false;
+
+  String _selectedCountryCode = "";
 
   @override
   void dispose() {
@@ -56,7 +67,7 @@ class _SignUpViewState extends State<SignUpView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // ✅ Logo
+                    // Logo
                     Container(
                       width: 120,
                       height: 120,
@@ -78,7 +89,6 @@ class _SignUpViewState extends State<SignUpView> {
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 25),
                     const Text('Sign Up', style: AuthTheme.titleStyle),
                     const SizedBox(height: 6),
@@ -143,6 +153,32 @@ class _SignUpViewState extends State<SignUpView> {
                           ),
                           const SizedBox(height: 18),
 
+                          // Country Dropdown (only addition)
+                          DropdownButtonFormField<String>(
+                            value: _selectedCountryCode,
+                            decoration: AuthTheme.textFieldDecoration(
+                              hintText: 'Country (optional)',
+                              icon: Icons.public,
+                            ),
+                            style: const TextStyle(color: Colors.white),
+                            dropdownColor: Colors.black.withOpacity(0.95),
+                            items: countryList
+                                .map((country) => DropdownMenuItem(
+                              value: country['code'],
+                              child: Text(
+                                country['name']!,
+                                style: const TextStyle(color: Colors.white), // <-- white text for visibility
+                              ),
+                            ))
+                                .toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedCountryCode = value ?? "";
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 18),
+
                           // Password
                           Obx(
                                 () => TextFormField(
@@ -186,19 +222,17 @@ class _SignUpViewState extends State<SignUpView> {
                                   ? null
                                   : () async {
                                 if (!_formKey.currentState!.validate()) return;
-
                                 final username = nameController.text.trim();
                                 final email = emailController.text.trim();
                                 final password = passwordController.text;
                                 setState(() => _loading = true);
-
                                 try {
                                   final result = await AuthApi.signup(
                                     email: email,
                                     username: username,
                                     password: password,
+                                    countryCode: _selectedCountryCode, // <--- added
                                   );
-
                                   if (result['ok'] == true) {
                                     if (mounted) {
                                       ScaffoldMessenger.of(context)
@@ -213,9 +247,7 @@ class _SignUpViewState extends State<SignUpView> {
                                       );
                                     }
                                   } else {
-                                    final err = (result['error'] ??
-                                        'Signup failed')
-                                        .toString();
+                                    final err = (result['error'] ?? 'Signup failed').toString();
                                     if (mounted) {
                                       ScaffoldMessenger.of(context)
                                           .showSnackBar(SnackBar(content: Text(err)));
@@ -241,8 +273,7 @@ class _SignUpViewState extends State<SignUpView> {
                                 ),
                               )
                                   : const Text('Sign Up',
-                                  style: TextStyle(
-                                      fontSize: 18, color: Colors.white)),
+                                  style: TextStyle(fontSize: 18, color: Colors.white)),
                             ),
                           ),
                         ],
@@ -256,8 +287,7 @@ class _SignUpViewState extends State<SignUpView> {
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                              builder: (ctx) => const LoginView()),
+                          MaterialPageRoute(builder: (ctx) => const LoginView()),
                         );
                         nameController.clear();
                         emailController.clear();
