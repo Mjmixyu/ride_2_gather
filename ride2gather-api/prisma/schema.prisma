@@ -4,90 +4,90 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-
-  url = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 //database models for sqlite db
 model User {
-  id Int @id @default(autoincrement())
-  email String @unique
-  username String @unique
-  passwordHash String
-  bio String? // nullable
-  pfp String? // profile image url
-  myBikeId Int?
-  myBike Bike? @relation("UserPrimaryBike", fields: [myBikeId], references: [id])
-  bikeMods String?
-  privacyAgreement Boolean @default(false)
-  lastOnline DateTime?
-  ghostMode Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               Int       @id @default(autoincrement())
+  email            String    @unique
+  username         String    @unique
+  passwordHash     String
+  bio              String? // nullable
+  pfp              String? // profile image url
+  myBikeId         Int?
+  myBike           Bike?     @relation("UserPrimaryBike", fields: [myBikeId], references: [id])
+  bikeMods         String?
+  privacyAgreement Boolean   @default(false)
+  lastOnline       DateTime?
+  ghostMode        Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  country_code     String?   @default("")
 
   // relations
-  locations Location[]
-  posts Post[]
-  sentChats Chat[] @relation("ChatSender")
-  receivedChats Chat[] @relation("ChatReceiver")
-  userHas UserHas[]
-  userSets UserSet[]
-  userPosts UserPost[]
-  userTexts UserText[]
+  locations     Location[]
+  posts         Post[]
+  sentChats     Chat[]     @relation("ChatSender")
+  receivedChats Chat[]     @relation("ChatReceiver")
+  userHas       UserHas[]
+  userSets      UserSet[]
+  userPosts     UserPost[]
+  userTexts     UserText[]
 }
 
 model Bike {
-  id Int @id @default(autoincrement())
-  name String
-  brand String?
-  image String?
-  model3d String?
+  id       Int     @id @default(autoincrement())
+  name     String
+  brand    String?
+  image    String?
+  model3d  String?
   category String?
 
   // reverse relations
-  owners UserHas[]
-  primaryOf User[] @relation("UserPrimaryBike")
+  owners    UserHas[]
+  primaryOf User[]    @relation("UserPrimaryBike")
 }
 
 model Location {
-  id Int @id @default(autoincrement())
-  userId Int
-  latitude Float? // SQLite stores as REAL
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  latitude  Float? // SQLite stores as REAL
   longitude Float?
-  pinImg String?
-  pinTxt String?
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  UserSet UserSet[]
+  pinImg    String?
+  pinTxt    String?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  UserSet   UserSet[]
 }
 
 model Post {
-  id Int @id @default(autoincrement())
-  userId Int
-  content String?
-  createdAt DateTime @default(now())
-  mediaUrl String?
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        Int        @id @default(autoincrement())
+  userId    Int
+  content   String?
+  createdAt DateTime   @default(now())
+  mediaUrl  String?
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   userLinks UserPost[]
 }
 
 model Chat {
-  id Int @id @default(autoincrement())
-  senderId Int
-  receiverId Int
-  messageTxt String?
-  sentAt DateTime @default(now())
-  readAt DateTime?
+  id          Int        @id @default(autoincrement())
+  senderId    Int
+  receiverId  Int
+  messageTxt  String?
+  sentAt      DateTime   @default(now())
+  readAt      DateTime?
   attachments String?
-  sender User @relation("ChatSender", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver User @relation("ChatReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
-  userTexts UserText[]
+  sender      User       @relation("ChatSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User       @relation("ChatReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  userTexts   UserText[]
 }
 
 model News {
-  id Int @id @default(autoincrement())
-  title String?
-  content String?
-  source String?
+  id          Int       @id @default(autoincrement())
+  title       String?
+  content     String?
+  source      String?
   publishedAt DateTime?
 }
 
@@ -95,31 +95,35 @@ model News {
 model UserHas {
   userId Int
   bikeId Int
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bike Bike @relation(fields: [bikeId], references: [id], onDelete: Cascade)
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bike   Bike @relation(fields: [bikeId], references: [id], onDelete: Cascade)
+
   @@id([userId, bikeId])
 }
 
 model UserSet {
-  userId Int
+  userId     Int
   locationId Int
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
   @@id([userId, locationId])
 }
 
 model UserPost {
   userId Int
   postId Int
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
   @@id([userId, postId])
 }
 
 model UserText {
   userId Int
   chatId Int
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chat   Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
   @@id([userId, chatId])
 }
