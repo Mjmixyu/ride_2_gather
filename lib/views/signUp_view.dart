@@ -49,15 +49,7 @@ class _SignUpViewState extends State<SignUpView> {
         width: double.infinity,
         height: double.infinity,
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF001AFF),
-              Color(0xFF020310),
-              Color(0xFF0A0B2E),
-            ],
-          ),
+          gradient: AuthTheme.backgroundGradient,
         ),
         child: SafeArea(
           child: Center(
@@ -93,8 +85,7 @@ class _SignUpViewState extends State<SignUpView> {
                     const SizedBox(height: 25),
                     const Text('Sign Up', style: AuthTheme.titleStyle),
                     const SizedBox(height: 6),
-                    const Text('Create your account',
-                        style: AuthTheme.subtitleStyle),
+                    const Text('Create your account', style: AuthTheme.subtitleStyle),
                     const SizedBox(height: 35),
 
                     // Rounded background container
@@ -144,38 +135,9 @@ class _SignUpViewState extends State<SignUpView> {
                             ),
                             validator: (value) {
                               if (value == null || value.isEmpty) {
-                                return 'Please enter an email';
-                              } else if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                                  .hasMatch(value)) {
-                                return 'Enter a valid email';
+                                return 'Please enter email';
                               }
                               return null;
-                            },
-                          ),
-                          const SizedBox(height: 18),
-
-                          // Country Dropdown (only addition)
-                          DropdownButtonFormField<String>(
-                            value: _selectedCountryCode,
-                            decoration: AuthTheme.textFieldDecoration(
-                              hintText: 'Country (optional)',
-                              icon: Icons.public,
-                            ),
-                            style: const TextStyle(color: Colors.white),
-                            dropdownColor: Colors.black.withOpacity(0.95),
-                            items: countryList
-                                .map((country) => DropdownMenuItem(
-                              value: country['code'],
-                              child: Text(
-                                country['name']!,
-                                style: const TextStyle(color: Colors.white), // <-- white text for visibility
-                              ),
-                            ))
-                                .toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedCountryCode = value ?? "";
-                              });
                             },
                           ),
                           const SizedBox(height: 18),
@@ -192,13 +154,10 @@ class _SignUpViewState extends State<SignUpView> {
                               ).copyWith(
                                 suffixIcon: IconButton(
                                   icon: Icon(
-                                    simpleUIController.isObscure.value
-                                        ? Icons.visibility
-                                        : Icons.visibility_off,
+                                    simpleUIController.isObscure.value ? Icons.visibility : Icons.visibility_off,
                                     color: Colors.white70,
                                   ),
-                                  onPressed: () =>
-                                      simpleUIController.isObscureActive(),
+                                  onPressed: () => simpleUIController.isObscureActive(),
                                 ),
                               ),
                               validator: (value) {
@@ -211,7 +170,30 @@ class _SignUpViewState extends State<SignUpView> {
                               },
                             ),
                           ),
-                          const SizedBox(height: 30),
+                          const SizedBox(height: 18),
+
+                          // Country selector (simple dropdown)
+                          DropdownButtonFormField<String>(
+                            value: _selectedCountryCode,
+                            dropdownColor: const Color(0xFF1A1A3C),
+                            style: const TextStyle(color: Colors.white),
+                            decoration: AuthTheme.textFieldDecoration(
+                              hintText: 'Country (optional)',
+                              icon: Icons.public,
+                            ),
+                            items: countryList
+                                .map(
+                                  (c) => DropdownMenuItem<String>(
+                                value: c['code'],
+                                child: Text(c['name'] ?? ''),
+                              ),
+                            )
+                                .toList(),
+                            onChanged: (val) {
+                              setState(() => _selectedCountryCode = val ?? "");
+                            },
+                          ),
+                          const SizedBox(height: 20),
 
                           // Sign Up Button
                           SizedBox(
@@ -232,33 +214,30 @@ class _SignUpViewState extends State<SignUpView> {
                                     email: email,
                                     username: username,
                                     password: password,
-                                    countryCode: _selectedCountryCode, // <--- added
+                                    countryCode: _selectedCountryCode,
                                   );
                                   if (result['ok'] == true) {
                                     if (mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(const SnackBar(
-                                          content: Text('Account created!')));
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Account created!')),
+                                      );
                                       Navigator.pushReplacement(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (ctx) =>
-                                              HomeFeed(username: username),
+                                          builder: (ctx) => HomeFeed(username: username),
                                         ),
                                       );
                                     }
                                   } else {
                                     final err = (result['error'] ?? 'Signup failed').toString();
                                     if (mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(SnackBar(content: Text(err)));
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
                                     }
                                   }
                                 } catch (e) {
                                   if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Network error: $e')),
-                                    );
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(SnackBar(content: Text('Network error: $e')));
                                   }
                                 } finally {
                                   if (mounted) setState(() => _loading = false);
@@ -273,8 +252,7 @@ class _SignUpViewState extends State<SignUpView> {
                                   color: Colors.white,
                                 ),
                               )
-                                  : const Text('Sign Up',
-                                  style: TextStyle(fontSize: 18, color: Colors.white)),
+                                  : const Text('Sign Up', style: TextStyle(fontSize: 18, color: Colors.white)),
                             ),
                           ),
                         ],

@@ -27,7 +27,14 @@ class _HomeFeedState extends State<HomeFeed> {
       MapView(),
       AddPostView(),
       FriendsChatView(),
-      UserProfilePage(username: widget.username, bio: '', bike: '', pfpUrl: '',),
+      // Pass viewerUsername so UserProfilePage can know whether viewer == profile owner
+      UserProfilePage(
+        username: widget.username,
+        bio: '',
+        bike: '',
+        pfpUrl: '',
+        viewerUsername: widget.username,
+      ),
     ];
   }
 

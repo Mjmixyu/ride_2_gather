@@ -35,15 +35,7 @@ class _LoginViewState extends State<LoginView> {
         width: double.infinity,
         height: double.infinity,
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF001AFF),
-              Color(0xFF0A0B2E),
-              Color(0xFF020310),
-            ],
-          ),
+          gradient: AuthTheme.backgroundGradient,
         ),
         child: SafeArea(
           child: Center(
@@ -79,122 +71,140 @@ class _LoginViewState extends State<LoginView> {
                     const SizedBox(height: 25),
                     const Text('Welcome Back', style: AuthTheme.titleStyle),
                     const SizedBox(height: 6),
-                    const Text('Login to your account',
-                        style: AuthTheme.subtitleStyle),
+                    const Text('Login to your account', style: AuthTheme.subtitleStyle),
                     const SizedBox(height: 35),
-                    // Identity (username or email)
-                    TextFormField(
-                      controller: identityController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: AuthTheme.textFieldDecoration(
-                        hintText: 'Username or Email',
-                        icon: Icons.person_outline,
+
+                    // Rounded background container (match SignUp)
+                    Container(
+                      padding: const EdgeInsets.all(25),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.35),
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 10,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter username or email';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    // Password
-                    Obx(
-                          () => TextFormField(
-                        controller: passwordController,
-                        style: const TextStyle(color: Colors.white),
-                        obscureText: simpleUIController.isObscure.value,
-                        decoration: AuthTheme.textFieldDecoration(
-                          hintText: 'Password',
-                          icon: Icons.lock_outline,
-                        ).copyWith(
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              simpleUIController.isObscure.value
-                                  ? Icons.visibility
-                                  : Icons.visibility_off,
-                              color: Colors.white70,
+                      child: Column(
+                        children: [
+                          // Identity (username or email)
+                          TextFormField(
+                            controller: identityController,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: AuthTheme.textFieldDecoration(
+                              hintText: 'Username or Email',
+                              icon: Icons.person_outline,
                             ),
-                            onPressed: () => simpleUIController.isObscureActive(),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter username or email';
+                              }
+                              return null;
+                            },
                           ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter password';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 40),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 55,
-                      child: ElevatedButton(
-                        style: AuthTheme.mainButtonStyle,
-                        onPressed: _loading
-                            ? null
-                            : () async {
-                          if (!_formKey.currentState!.validate()) return;
-                          setState(() => _loading = true);
-                          try {
-                            final result = await AuthApi.login(
-                              identity: identityController.text.trim(),
-                              password: passwordController.text,
-                            );
-                            if (result['ok'] == true) {
-                              final user = result['data'];
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Login successful!')),
-                                );
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (ctx) =>
-                                        HomeFeed(username: user['username']),
+                          const SizedBox(height: 18),
+
+                          // Password
+                          Obx(
+                                () => TextFormField(
+                              controller: passwordController,
+                              style: const TextStyle(color: Colors.white),
+                              obscureText: simpleUIController.isObscure.value,
+                              decoration: AuthTheme.textFieldDecoration(
+                                hintText: 'Password',
+                                icon: Icons.lock_outline,
+                              ).copyWith(
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    simpleUIController.isObscure.value
+                                        ? Icons.visibility
+                                        : Icons.visibility_off,
+                                    color: Colors.white70,
                                   ),
-                                );
-                              }
-                            } else {
-                              final err = (result['error'] ?? 'Login failed').toString();
-                              if (mounted) {
-                                ScaffoldMessenger.of(context)
-                                    .showSnackBar(SnackBar(content: Text(err)));
-                              }
-                            }
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Network error: $e')),
-                              );
-                            }
-                          } finally {
-                            if (mounted) setState(() => _loading = false);
-                          }
-                        },
-                        child: _loading
-                            ? const SizedBox(
-                          height: 22,
-                          width: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
+                                  onPressed: () => simpleUIController.isObscureActive(),
+                                ),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please enter password';
+                                }
+                                return null;
+                              },
+                            ),
                           ),
-                        )
-                            : const Text(
-                          'Log In',
-                          style: TextStyle(fontSize: 18, color: Colors.white),
-                        ),
+                          const SizedBox(height: 28),
+
+                          // Button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 55,
+                            child: ElevatedButton(
+                              style: AuthTheme.mainButtonStyle,
+                              onPressed: _loading
+                                  ? null
+                                  : () async {
+                                if (!_formKey.currentState!.validate()) return;
+                                setState(() => _loading = true);
+                                try {
+                                  final result = await AuthApi.login(
+                                    identity: identityController.text.trim(),
+                                    password: passwordController.text,
+                                  );
+                                  if (result['ok'] == true) {
+                                    final user = result['data'];
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Login successful!')));
+                                      Navigator.pushReplacement(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (ctx) => HomeFeed(username: user['username']),
+                                        ),
+                                      );
+                                    }
+                                  } else {
+                                    final err = (result['error'] ?? 'Login failed').toString();
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+                                    }
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(SnackBar(content: Text('Network error: $e')));
+                                  }
+                                } finally {
+                                  if (mounted) setState(() => _loading = false);
+                                }
+                              },
+                              child: _loading
+                                  ? const SizedBox(
+                                height: 22,
+                                width: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                                  : const Text(
+                                'Log In',
+                                style: TextStyle(fontSize: 18, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
+
                     const SizedBox(height: 28),
                     GestureDetector(
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                              builder: (ctx) => const SignUpView()),
+                          MaterialPageRoute(builder: (ctx) => const SignUpView()),
                         );
                       },
                       child: RichText(
