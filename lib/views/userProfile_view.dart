@@ -1,26 +1,75 @@
 import 'package:flutter/material.dart';
+import 'user_settings_view.dart';
 
 class UserProfilePage extends StatelessWidget {
   final String username;
   final String bio;
+  final String bike;
+  final String pfpUrl;
 
-  UserProfilePage({super.key, required this.username, this.bio = "stuff abt me"});
-
-  // Example posts list
-  final List<String> posts = List.generate(12, (i) => "post_$i");
+  const UserProfilePage({
+    Key? key,
+    required this.username,
+    required this.bio,
+    required this.bike,
+    required this.pfpUrl,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    // Example posts list
+    final List<String> posts = List.generate(12, (i) => "post_$i");
+
     return Column(
       children: [
-        // Profile picture
-        Container(
-          height: 220,
-          width: double.infinity,
-          color: Colors.grey.shade300,
-          child: const Icon(Icons.person, size: 100, color: Colors.white),
+        // Profile picture with settings button overlay (bottom right)
+        Stack(
+          children: [
+            Container(
+              height: 220,
+              width: double.infinity,
+              color: Colors.grey.shade300,
+              child: pfpUrl.isNotEmpty
+                  ? Image.network(
+                      pfpUrl,
+                      width: double.infinity,
+                      height: 220,
+                      fit: BoxFit.cover,
+                    )
+                  : const Icon(Icons.person, size: 100, color: Colors.white),
+            ),
+            Positioned(
+              bottom: 8,
+              right: 8,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.settings,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                  tooltip: "User Settings",
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => UserSettingsPage(
+                          username: username,
+                          bio: bio,
+                          bike: bike,
+                          pfpUrl: pfpUrl,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
         ),
-
         // Blue section
         Expanded(
           child: Container(
@@ -37,14 +86,20 @@ class UserProfilePage extends StatelessWidget {
               children: [
                 // Username + follow button
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         "@$username",
                         style: const TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
@@ -55,11 +110,10 @@ class UserProfilePage extends StatelessWidget {
                         ),
                         onPressed: () {},
                         child: const Text("Follow"),
-                      )
+                      ),
                     ],
                   ),
                 ),
-
                 // Bio
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -68,9 +122,7 @@ class UserProfilePage extends StatelessWidget {
                     style: const TextStyle(color: Colors.white70, fontSize: 14),
                   ),
                 ),
-
                 const SizedBox(height: 12),
-
                 // Bike placeholder
                 Center(
                   child: Container(
@@ -81,21 +133,24 @@ class UserProfilePage extends StatelessWidget {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Icon(Icons.motorcycle, size: 120, color: Colors.black),
+                    child: const Icon(
+                      Icons.motorcycle,
+                      size: 120,
+                      color: Colors.black,
+                    ),
                   ),
                 ),
-
                 const SizedBox(height: 12),
-
                 // Posts grid
                 Expanded(
                   child: GridView.builder(
                     padding: const EdgeInsets.all(8),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      crossAxisSpacing: 6,
-                      mainAxisSpacing: 6,
-                    ),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 6,
+                          mainAxisSpacing: 6,
+                        ),
                     itemCount: posts.length,
                     itemBuilder: (context, index) {
                       return Container(

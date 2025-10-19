@@ -27,7 +27,7 @@ class _HomeFeedState extends State<HomeFeed> {
       MapView(),
       AddPostView(),
       FriendsChatView(),
-      UserProfilePage(username: widget.username),
+      UserProfilePage(username: widget.username, bio: '', bike: '', pfpUrl: '',),
     ];
   }
 
