@@ -4,8 +4,10 @@
 import 'package:flutter/material.dart';
 import '../theme/auth_theme.dart';
 import '../models/bike.dart';
+import '../core/auth_api.dart';
 
 class UserSettingsPage extends StatefulWidget {
+  final int userId;
   final String username;
   final String bio;
   final String bike;
@@ -13,6 +15,7 @@ class UserSettingsPage extends StatefulWidget {
 
   const UserSettingsPage({
     Key? key,
+    required this.userId,
     required this.username,
     required this.bio,
     required this.bike,
@@ -48,12 +51,33 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
   void _onSave() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
-    // keep functionality unchanged - simulate saving
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (mounted) {
-      setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved')));
-      Navigator.of(context).pop();
+
+    try {
+      // call API to update bio and bike (bike name is saved as provided)
+      final result = await AuthApi.updateUserSettings(
+        userId: widget.userId,
+        bio: _bioController.text.trim(),
+        bikeName: _bikeType,
+      );
+
+      if (result['ok'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved')));
+          // Return true so caller can refresh
+          Navigator.of(context).pop(true);
+        }
+      } else {
+        final err = (result['error'] ?? 'Save failed').toString();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Network error: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -114,8 +138,7 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
                               backgroundColor: Colors.white,
                               backgroundImage:
                               widget.pfpUrl.isNotEmpty ? NetworkImage(widget.pfpUrl) as ImageProvider : null,
-                              child:
-                              widget.pfpUrl.isEmpty ? const Icon(Icons.person, size: 32, color: Colors.black54) : null,
+                              child: widget.pfpUrl.isEmpty ? const Icon(Icons.person, size: 32, color: Colors.black54) : null,
                             ),
                             const SizedBox(width: 12),
                             Column(
@@ -190,7 +213,7 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
                                   height: 20,
                                   width: 20,
                                   child: Image.asset(
-                                    b.assetPath,
+                                    '${b.assetPath}.png',
                                     fit: BoxFit.contain,
                                     errorBuilder: (context, error, stackTrace) =>
                                     const Icon(Icons.pedal_bike, size: 18, color: Colors.white),
@@ -231,7 +254,7 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
                               side: BorderSide(color: Colors.white.withOpacity(0.08)),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
-                            onPressed: () => Navigator.of(context).pop(),
+                            onPressed: () => Navigator.of(context).pop(false),
                             child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
                           ),
                         ),

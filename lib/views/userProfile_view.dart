@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'user_settings_view.dart';
 import '../theme/auth_theme.dart';
+import '../core/auth_api.dart';
+import '../models/bike.dart';
 
-class UserProfilePage extends StatelessWidget {
+class UserProfilePage extends StatefulWidget {
   final String username;
   final String bio;
   final String bike;
   final String pfpUrl;
   final String? viewerUsername; // who's viewing the profile (nullable)
+  final int userId;
 
   const UserProfilePage({
     Key? key,
@@ -16,16 +19,63 @@ class UserProfilePage extends StatelessWidget {
     required this.bike,
     required this.pfpUrl,
     this.viewerUsername,
+    required this.userId,
   }) : super(key: key);
+
+  @override
+  State<UserProfilePage> createState() => _UserProfilePageState();
+}
+
+class _UserProfilePageState extends State<UserProfilePage> {
+  String _bio = '';
+  String _bike = '';
+  String _pfp = '';
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _bio = widget.bio;
+    _bike = widget.bike;
+    _pfp = widget.pfpUrl;
+    _fetchUser();
+  }
+
+  Future<void> _fetchUser() async {
+    setState(() => _loading = true);
+    try {
+      final res = await AuthApi.getUserByUsername(widget.username);
+      if (res['ok'] == true) {
+        final data = res['data'];
+        setState(() {
+          _bio = (data['bio'] ?? '') as String;
+          _pfp = (data['pfp'] ?? '') as String;
+          // myBike may be object or null
+          final myBike = data['myBike'];
+          if (myBike != null && myBike['name'] != null) {
+            _bike = myBike['name'] as String;
+          } else {
+            _bike = '';
+          }
+        });
+      } else {
+        // show error (optional)
+      }
+    } catch (e) {
+      // ignore for now
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // Determine whether the current viewer is the profile owner
+  bool get isOwnProfile => widget.viewerUsername != null && widget.viewerUsername == widget.username;
 
   @override
   Widget build(BuildContext context) {
     // Example posts list
     final List<String> posts = List.generate(12, (i) => "post_$i");
     final mediaTopHeight = 300.0;
-
-    // Determine if the current viewer is the profile owner
-    final bool isOwnProfile = viewerUsername != null && viewerUsername == username;
 
     return Scaffold(
       // keep scaffold's background as gradient to match auth screens
@@ -49,9 +99,9 @@ class UserProfilePage extends StatelessWidget {
                     children: [
                       // Background image or solid color
                       Positioned.fill(
-                        child: pfpUrl.isNotEmpty
+                        child: _pfp.isNotEmpty
                             ? Image.network(
-                          pfpUrl,
+                          _pfp,
                           fit: BoxFit.cover,
                           width: double.infinity,
                           height: mediaTopHeight,
@@ -130,7 +180,7 @@ class UserProfilePage extends StatelessWidget {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          "@$username",
+                                          "@${widget.username}",
                                           style: const TextStyle(
                                             fontSize: 20,
                                             fontWeight: FontWeight.bold,
@@ -139,8 +189,10 @@ class UserProfilePage extends StatelessWidget {
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                         const SizedBox(height: 6),
-                                        Text(
-                                          bio,
+                                        _loading
+                                            ? const Text('Loading...', style: TextStyle(color: Colors.white70, fontSize: 13))
+                                            : Text(
+                                          _bio,
                                           style: const TextStyle(color: Colors.white70, fontSize: 13),
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
@@ -188,14 +240,36 @@ class UserProfilePage extends StatelessWidget {
                                     child: Column(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
-                                        const Icon(Icons.motorcycle, size: 80, color: Colors.black),
-                                        if (bike.isNotEmpty)
-                                          Padding(
-                                            padding: const EdgeInsets.only(top: 8.0),
-                                            child: Text(
-                                              bike,
-                                              style: const TextStyle(fontSize: 14, color: Colors.black),
-                                            ),
+                                        // If a known bike from enum exists, show its asset; otherwise fallback to an icon and text
+                                        if (_bike.isNotEmpty)
+                                          Builder(builder: (context) {
+                                            final match = allBikes.where((b) => b.displayName == _bike);
+                                            if (match.isNotEmpty) {
+                                              final b = match.first;
+                                              return Column(
+                                                children: [
+                                                  Image.asset('${b.assetPath}.png', height: 130, fit: BoxFit.contain, errorBuilder: (_, __, ___) {
+                                                    return const Icon(Icons.motorcycle, size: 80, color: Colors.black);
+                                                  }),
+                                                  const SizedBox(height: 8),
+                                                  // Text(_bike, style: const TextStyle(fontSize: 14, color: Colors.black)),
+                                                ],
+                                              );
+                                            } else {
+                                              return Column(
+                                                children: [
+                                                  const Icon(Icons.motorcycle, size: 80, color: Colors.black),
+                                                  const SizedBox(height: 8),
+                                                  Text(_bike, style: const TextStyle(fontSize: 14, color: Colors.black)),
+                                                ],
+                                              );
+                                            }
+                                          })
+                                        else
+                                          Column(
+                                            children: const [
+                                              Icon(Icons.motorcycle, size: 80, color: Colors.black),
+                                            ],
                                           ),
                                       ],
                                     ),
@@ -240,51 +314,58 @@ class UserProfilePage extends StatelessWidget {
             ),
 
             // Settings button: placed last in the Stack so it's on top and receives taps.
-            Positioned(
-              // place slightly below the bottom edge of the top image (overlapping the content)
-              top: mediaTopHeight - 36,
-              right: 16,
-              child: Material(
-                // Material used to get proper elevation/shadow and to ensure taps are recognized
-                color: Colors.transparent,
-                elevation: 6,
-                shape: const CircleBorder(),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white.withOpacity(0.06), width: 1.0),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.35),
-                        blurRadius: 6,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.settings,
-                      color: Colors.white,
-                      size: 26,
-                    ),
-                    tooltip: "User Settings",
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => UserSettingsPage(
-                            username: username,
-                            bio: bio,
-                            bike: bike,
-                            pfpUrl: pfpUrl,
-                          ),
+            if (isOwnProfile)
+              Positioned(
+                // place slightly below the bottom edge of the top image (overlapping the content)
+                top: mediaTopHeight - 36,
+                right: 16,
+                child: Material(
+                  // Material used to get proper elevation/shadow and to ensure taps are recognized
+                  color: Colors.transparent,
+                  elevation: 6,
+                  shape: const CircleBorder(),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white.withOpacity(0.06), width: 1.0),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.35),
+                          blurRadius: 6,
+                          offset: const Offset(0, 3),
                         ),
-                      );
-                    },
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.settings,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                      tooltip: "User Settings",
+                      onPressed: () async {
+                        // open settings and refresh after save
+                        final result = await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => UserSettingsPage(
+                              userId: widget.userId,
+                              username: widget.username,
+                              bio: _bio,
+                              bike: _bike,
+                              pfpUrl: _pfp,
+                            ),
+                          ),
+                        );
+                        if (result == true) {
+                          // user saved changes — refresh displayed data
+                          await _fetchUser();
+                        }
+                      },
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),

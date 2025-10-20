@@ -161,7 +161,10 @@ class _LoginViewState extends State<LoginView> {
                                       Navigator.pushReplacement(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (ctx) => HomeFeed(username: user['username']),
+                                          builder: (ctx) => HomeFeed(
+                                            username: user['username'],
+                                            userId: user['id'],
+                                          ),
                                         ),
                                       );
                                     }

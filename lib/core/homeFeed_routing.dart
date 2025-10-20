@@ -7,8 +7,9 @@ import '../views/map_view.dart';
 
 class HomeFeed extends StatefulWidget {
   final String username;
+  final int userId;
 
-  const HomeFeed({Key? key, required this.username}) : super(key: key);
+  const HomeFeed({Key? key, required this.username, required this.userId}) : super(key: key);
 
   @override
   State<HomeFeed> createState() => _HomeFeedState();
@@ -34,6 +35,7 @@ class _HomeFeedState extends State<HomeFeed> {
         bike: '',
         pfpUrl: '',
         viewerUsername: widget.username,
+        userId: widget.userId,
       ),
     ];
   }

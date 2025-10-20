@@ -217,6 +217,7 @@ class _SignUpViewState extends State<SignUpView> {
                                     countryCode: _selectedCountryCode,
                                   );
                                   if (result['ok'] == true) {
+                                    final user = result['data'];
                                     if (mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         const SnackBar(content: Text('Account created!')),
@@ -224,7 +225,7 @@ class _SignUpViewState extends State<SignUpView> {
                                       Navigator.pushReplacement(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (ctx) => HomeFeed(username: username),
+                                          builder: (ctx) => HomeFeed(username: username, userId: user['id']),
                                         ),
                                       );
                                     }

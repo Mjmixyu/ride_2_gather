@@ -101,6 +101,108 @@ app.post('/login', async (req, res) => {
     }
 });
 
+/**
+ * Get user by username (including their primary bike info if set)
+ * returns 200 with user object or 404 if not found
+ * user object example:
+ * {
+ *   id, email, username, bio, pfp, country_code, myBikeId, myBike: { id, name, image }
+ * }
+ */
+app.get('/user/:username', async (req, res) => {
+    try {
+        const { username } = req.params;
+        const user = await prisma.user.findUnique({
+            where: { username },
+            include: { myBike: true }
+        });
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        // return selected fields only
+        const out = {
+            id: user.id,
+            email: user.email,
+            username: user.username,
+            bio: user.bio || '',
+            pfp: user.pfp || '',
+            country_code: user.country_code || '',
+            myBikeId: user.myBikeId || null,
+            myBike: user.myBike || null
+        };
+        return res.json(out);
+    } catch (e) {
+        console.error('GET_USER_ERROR:', e);
+        return res.status(500).json({ error: e?.message || 'server error' });
+    }
+});
+
+/**
+ * Update user settings (bio and bike)
+ * Accepts JSON body: { bio?: string, bike_name?: string }
+ *
+ * Note: Prisma.upsert requires a unique field in `where`. In this project's Prisma schema the Bike.name
+ * field is not marked unique, so upsert({ where: { name } }) fails.  To avoid that we:
+ *  - try to find a Bike by name (findFirst)
+ *  - if found, reuse it
+ *  - otherwise create a new Bike row (create)
+ */
+app.patch('/user/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) return res.status(400).json({ error: 'invalid user id' });
+        const { bio, bike_name } = req.body || {};
+
+        // Make sure user exists
+        const exists = await prisma.user.findUnique({ where: { id } });
+        if (!exists) return res.status(404).json({ error: 'User not found' });
+
+        const dataToUpdate = {};
+        if (typeof bio !== 'undefined') dataToUpdate.bio = bio;
+
+        if (typeof bike_name !== 'undefined') {
+            if (bike_name === null || String(bike_name).trim() === '') {
+                // clear the bike selection
+                dataToUpdate.myBikeId = null;
+            } else {
+                const bikeName = String(bike_name).trim();
+
+                // Try to find an existing bike with this name (name is not unique in schema,
+                // so we cannot upsert by name). If none found, create a new bike row.
+                let bike = await prisma.bike.findFirst({
+                    where: { name: bikeName },
+                    // optionally include other distinguishing fields if you want
+                });
+
+                if (!bike) {
+                    bike = await prisma.bike.create({
+                        data: { name: bikeName }
+                    });
+                }
+
+                dataToUpdate.myBikeId = bike.id;
+            }
+        }
+
+        const updated = await prisma.user.update({
+            where: { id },
+            data: dataToUpdate,
+            include: { myBike: true }
+        });
+
+        return res.json({
+            id: updated.id,
+            email: updated.email,
+            username: updated.username,
+            bio: updated.bio || '',
+            pfp: updated.pfp || '',
+            myBikeId: updated.myBikeId || null,
+            myBike: updated.myBike || null
+        });
+    } catch (e) {
+        console.error('UPDATE_USER_ERROR:', e);
+        return res.status(500).json({ error: e?.message || 'server error' });
+    }
+});
+
 //log unhandled promise rejections so nothing is swallowed
 process.on('unhandledRejection', (e) => {
     console.error('UNHANDLED_REJECTION:', e);
