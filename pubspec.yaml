@@ -37,9 +37,7 @@ flutter:
 
   assets:
     - assets/images/logo.png
-    - assets/images/yamahaR7
-    - assets/images/kawasakiZX4R
-    - assets/images/hondaCBR650R
+    - assets/images/
 
   # fonts:
   #   - family: Schyler
