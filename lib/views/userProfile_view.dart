@@ -3,6 +3,9 @@ import 'user_settings_view.dart';
 import '../theme/auth_theme.dart';
 import '../core/auth_api.dart';
 import '../models/bike.dart';
+import '../services/post_repository.dart';
+import '../models/post.dart';
+import 'dart:io';
 
 class UserProfilePage extends StatefulWidget {
   final String username;
@@ -32,6 +35,8 @@ class _UserProfilePageState extends State<UserProfilePage> {
   String _pfp = '';
   bool _loading = true;
 
+  List<Post> _posts = [];
+
   @override
   void initState() {
     super.initState();
@@ -39,6 +44,22 @@ class _UserProfilePageState extends State<UserProfilePage> {
     _bike = widget.bike;
     _pfp = widget.pfpUrl;
     _fetchUser();
+    _posts = PostRepository.instance.posts.where((p) => p.author == widget.username).toList();
+    PostRepository.instance.addListener(_repoUpdated);
+  }
+
+  @override
+  void dispose() {
+    PostRepository.instance.removeListener(_repoUpdated);
+    super.dispose();
+  }
+
+  void _repoUpdated() {
+    if (mounted) {
+      setState(() {
+        _posts = PostRepository.instance.posts.where((p) => p.author == widget.username).toList();
+      });
+    }
   }
 
   Future<void> _fetchUser() async {
@@ -73,8 +94,6 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    // Example posts list
-    final List<String> posts = List.generate(12, (i) => "post_$i");
     final mediaTopHeight = 300.0;
 
     return Scaffold(
@@ -142,7 +161,6 @@ class _UserProfilePageState extends State<UserProfilePage> {
                 child: Column(
                   children: [
                     // Reserve space so the top image remains visible to the very top.
-                    // Reduced the spacer by 12 pixels so the content will overlap the image
                     SizedBox(height: mediaTopHeight - 102),
 
                     // Dark rounded content area that matches auth design
@@ -280,26 +298,56 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
                             const SizedBox(height: 12),
 
-                            // Posts grid
+                            // Posts grid - use real posts from the repository
                             Expanded(
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                child: GridView.builder(
+                                child: _posts.isEmpty
+                                    ? Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(28.0),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: const [
+                                        Icon(Icons.photo_library, size: 64, color: Colors.white70),
+                                        SizedBox(height: 12),
+                                        Text('No posts yet', style: TextStyle(color: Colors.white70)),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                                    : GridView.builder(
                                   padding: const EdgeInsets.only(top: 8, bottom: 16),
                                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: 3,
                                     crossAxisSpacing: 6,
                                     mainAxisSpacing: 6,
                                   ),
-                                  itemCount: posts.length,
+                                  itemCount: _posts.length,
                                   itemBuilder: (context, index) {
-                                    return Container(
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.shade400,
+                                    final post = _posts[index];
+                                    if (post.mediaPath != null && post.mediaType == "image") {
+                                      return ClipRRect(
                                         borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: const Icon(Icons.image, color: Colors.white),
-                                    );
+                                        child: Image.file(File(post.mediaPath!), fit: BoxFit.cover),
+                                      );
+                                    } else if (post.mediaPath != null && post.mediaType == "video") {
+                                      return Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade800,
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: const Center(child: Icon(Icons.videocam, color: Colors.white70)),
+                                      );
+                                    } else {
+                                      return Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade400,
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: const Icon(Icons.text_snippet, color: Colors.white),
+                                      );
+                                    }
                                   },
                                 ),
                               ),

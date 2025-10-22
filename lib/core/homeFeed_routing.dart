@@ -4,6 +4,7 @@ import '../views/feed_view.dart';
 import '../views/firends_chat_view.dart';
 import '../views/userProfile_view.dart';
 import '../views/map_view.dart';
+import '../services/post_repository.dart';
 
 class HomeFeed extends StatefulWidget {
   final String username;
@@ -19,15 +20,16 @@ class _HomeFeedState extends State<HomeFeed> {
   int _selectedIndex = 0;
 
   late final List<Widget> _pages;
+  late final VoidCallback _tabListener;
 
   @override
   void initState() {
     super.initState();
     _pages = [
       FeedView(onProfileTap: _onProfileNav, username: widget.username),
-      MapView(),
-      AddPostView(),
-      FriendsChatView(),
+      const MapView(),
+      AddPostView(author: widget.username), // pass actual username so posts have the right author
+      const FriendsChatView(),
       // Pass viewerUsername so UserProfilePage can know whether viewer == profile owner
       UserProfilePage(
         username: widget.username,
@@ -38,6 +40,25 @@ class _HomeFeedState extends State<HomeFeed> {
         userId: widget.userId,
       ),
     ];
+
+    // Listen for tab requests from PostRepository (e.g. AddPostView requests switch to feed)
+    _tabListener = () {
+      final req = PostRepository.instance.tabRequest.value;
+      if (req != null) {
+        setState(() {
+          _selectedIndex = req;
+        });
+        // reset request
+        PostRepository.instance.tabRequest.value = null;
+      }
+    };
+    PostRepository.instance.tabRequest.addListener(_tabListener);
+  }
+
+  @override
+  void dispose() {
+    PostRepository.instance.tabRequest.removeListener(_tabListener);
+    super.dispose();
   }
 
   void _onProfileNav() {

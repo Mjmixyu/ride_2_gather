@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import '../services/post_repository.dart';
 
 class AddPostView extends StatefulWidget {
-  const AddPostView({super.key});
+  final String author;
+  const AddPostView({super.key, required this.author});
 
   @override
   State<AddPostView> createState() => _AddPostViewState();
@@ -16,13 +18,14 @@ class _AddPostViewState extends State<AddPostView> {
   final _bioController = TextEditingController();
 
   final ImagePicker _picker = ImagePicker();
+  bool _submitting = false;
 
-  Future<void> _pickMedia(ImageSource source, {bool isVideo = false}) async {
+  Future<void> _pickMediaFromGallery({required bool isVideo}) async {
     XFile? pickedFile;
     if (isVideo) {
-      pickedFile = await _picker.pickVideo(source: source);
+      pickedFile = await _picker.pickVideo(source: ImageSource.gallery);
     } else {
-      pickedFile = await _picker.pickImage(source: source);
+      pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     }
     if (pickedFile != null) {
       setState(() {
@@ -32,23 +35,87 @@ class _AddPostViewState extends State<AddPostView> {
     }
   }
 
-  void _submitPost() {
-    String content;
-    if (_mediaType == "") {
-      content = _textController.text;
-    } else {
-      content = "Media: $_mediaType | Bio: ${_bioController.text}";
-    }
-    // TODO: Implement actual post upload logic
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Post created: $content')),
+  Future<void> _showAddMediaSheet() async {
+    final res = await showModalBottomSheet<int?>(
+      context: context,
+      builder: (ctx) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Choose Photo'),
+                onTap: () => Navigator.of(ctx).pop(0),
+              ),
+              ListTile(
+                leading: const Icon(Icons.video_library),
+                title: const Text('Choose Video'),
+                onTap: () => Navigator.of(ctx).pop(1),
+              ),
+              ListTile(
+                leading: const Icon(Icons.close),
+                title: const Text('Cancel'),
+                onTap: () => Navigator.of(ctx).pop(null),
+              ),
+            ],
+          ),
+        );
+      },
     );
-    setState(() {
-      _mediaFile = null;
-      _mediaType = "";
-      _textController.clear();
-      _bioController.clear();
-    });
+
+    if (res == 0) {
+      await _pickMediaFromGallery(isVideo: false);
+    } else if (res == 1) {
+      await _pickMediaFromGallery(isVideo: true);
+    }
+  }
+
+  Future<void> _submitPost() async {
+    if (_submitting) return;
+    setState(() => _submitting = true);
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    final textContent = _textController.text.trim();
+    final bio = _bioController.text.trim();
+
+    try {
+      // Use real author passed into widget
+      final author = widget.author;
+
+      final created = await PostRepository.instance.addPost(
+        author: author,
+        text: textContent.isEmpty ? bio : textContent,
+        mediaFile: _mediaFile,
+        mediaType: _mediaType,
+      );
+
+      if (!mounted) return;
+
+      messenger.showSnackBar(const SnackBar(content: Text('Post created')));
+
+      // request HomeFeed to switch back to feed (tab index 0)
+      PostRepository.instance.tabRequest.value = 0;
+
+      // reset UI
+      setState(() {
+        _mediaFile = null;
+        _mediaType = "";
+        _textController.clear();
+        _bioController.clear();
+      });
+    } catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text('Failed to create post: $e')));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _bioController.dispose();
+    super.dispose();
   }
 
   @override
@@ -63,24 +130,17 @@ class _AddPostViewState extends State<AddPostView> {
             Column(
               children: [
                 ElevatedButton.icon(
-                  onPressed: () => _pickMedia(ImageSource.gallery, isVideo: false),
-                  icon: const Icon(Icons.image),
-                  label: const Text('Add Image'),
+                  onPressed: _showAddMediaSheet,
+                  icon: const Icon(Icons.add_photo_alternate),
+                  label: const Text('Add Media'),
                 ),
-                ElevatedButton.icon(
-                  onPressed: () => _pickMedia(ImageSource.gallery, isVideo: true),
-                  icon: const Icon(Icons.videocam),
-                  label: const Text('Add Video'),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12.0),
-                  child: TextField(
-                    controller: _textController,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: 'Write something...',
-                      border: OutlineInputBorder(),
-                    ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _textController,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Write something...',
+                    border: OutlineInputBorder(),
                   ),
                 ),
               ],
@@ -88,23 +148,33 @@ class _AddPostViewState extends State<AddPostView> {
           else
             Column(
               children: [
-                _mediaType == "image"
-                    ? Image.file(_mediaFile!, height: 200, fit: BoxFit.cover)
-                    : const Icon(Icons.videocam, size: 200), // Placeholder for video preview
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _bioController,
-                  decoration: const InputDecoration(
-                    labelText: 'Add a bio/caption...',
-                    border: OutlineInputBorder(),
+                if (_mediaType == "image")
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(_mediaFile!, width: double.infinity, height: 240, fit: BoxFit.cover),
+                  )
+                else
+                  Container(
+                    width: double.infinity,
+                    height: 200,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Center(child: Icon(Icons.videocam, size: 64)),
                   ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _textController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(hintText: 'Write a caption...', border: OutlineInputBorder()),
                 ),
+                const SizedBox(height: 8),
                 TextButton.icon(
                   onPressed: () {
                     setState(() {
                       _mediaFile = null;
                       _mediaType = "";
-                      _bioController.clear();
                     });
                   },
                   icon: const Icon(Icons.delete),
@@ -113,11 +183,10 @@ class _AddPostViewState extends State<AddPostView> {
               ],
             ),
           const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: (_mediaFile == null && _textController.text.isEmpty)
-                ? null
-                : _submitPost,
-            child: const Text('Post'),
+          ElevatedButton.icon(
+            onPressed: (_mediaFile == null && _textController.text.isEmpty) || _submitting ? null : _submitPost,
+            icon: _submitting ? const SizedBox.shrink() : const Icon(Icons.send),
+            label: Text(_submitting ? 'Posting...' : 'Post'),
           ),
         ],
       ),
