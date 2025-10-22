@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import '../theme/auth_theme.dart';
 
-// Simple friend and post models (kept from original)
+/// Simple friend and post models (kept from original)
 class Friend {
   final String name;
   final bool online;
@@ -66,25 +67,19 @@ class _FriendsChatViewState extends State<FriendsChatView> {
 
   @override
   Widget build(BuildContext context) {
-    // Reuse the same visual language as the FeedView (gradient background + dark rounded card)
+    // Use the shared auth/login gradient so the page background matches other pages
     return Scaffold(
+      // entire screen uses the app's auth gradient so it aligns visually with other pages
       body: Container(
         width: double.infinity,
         height: double.infinity,
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF10243A),
-              Color(0xFF3A6EA5),
-            ],
-          ),
+          gradient: AuthTheme.backgroundGradient,
         ),
         child: SafeArea(
           child: Column(
             children: [
-              // header row
+              // Header: simple title row (keeps existing icons but styled for the gradient)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 child: Row(
@@ -113,28 +108,28 @@ class _FriendsChatViewState extends State<FriendsChatView> {
                 ),
               ),
 
-              // container card like feed
+              // Main rounded card container to match the other pages' dark translucent cards
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.04),
+                      color: Colors.black.withOpacity(0.45),
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.45),
-                          blurRadius: 14,
+                          blurRadius: 18,
                           offset: const Offset(0, 8),
                         ),
                       ],
-                      border: Border.all(color: Colors.white.withOpacity(0.02)),
+                      border: Border.all(color: Colors.white.withOpacity(0.03)),
                     ),
                     child: Column(
                       children: [
-                        // search field and quick actions
+                        // Search / quick actions row inside the card, styled as pill input
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                           child: Row(
                             children: [
                               Expanded(
@@ -144,15 +139,22 @@ class _FriendsChatViewState extends State<FriendsChatView> {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  child: TextField(
-                                    onChanged: (val) => setState(() => searchQuery = val),
-                                    style: const TextStyle(color: Colors.white),
-                                    decoration: const InputDecoration(
-                                      hintText: 'Search friends',
-                                      hintStyle: TextStyle(color: Colors.white70),
-                                      border: InputBorder.none,
-                                      icon: Icon(Icons.search, color: Colors.white70),
-                                    ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.search, color: Colors.white70),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: TextField(
+                                          onChanged: (val) => setState(() => searchQuery = val),
+                                          style: const TextStyle(color: Colors.white),
+                                          decoration: const InputDecoration(
+                                            hintText: 'Search friends',
+                                            hintStyle: TextStyle(color: Colors.white70),
+                                            border: InputBorder.none,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -172,7 +174,7 @@ class _FriendsChatViewState extends State<FriendsChatView> {
 
                         const Divider(color: Colors.white12, height: 1),
 
-                        // friends list
+                        // Friends list
                         Expanded(
                           child: ListView.separated(
                             padding: const EdgeInsets.all(12),
@@ -191,7 +193,7 @@ class _FriendsChatViewState extends State<FriendsChatView> {
                                 subtitle: Text(friend.online ? "Active recently" : "Offline", style: const TextStyle(color: Colors.white70)),
                                 trailing: IconButton(
                                   icon: const Icon(Icons.chat_bubble_outline, color: Colors.white70),
-                                  onPressed: () {},
+                                  onPressed: () => openChat(friend),
                                 ),
                                 onTap: () => openChat(friend),
                               );
@@ -201,7 +203,7 @@ class _FriendsChatViewState extends State<FriendsChatView> {
 
                         const Divider(color: Colors.white12, height: 1),
 
-                        // friends' latest posts horizontal
+                        // friends' latest posts horizontal (styled to match the card)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                           child: Column(
@@ -279,20 +281,22 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Chat screen uses the same gradient background to match other pages
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        leading: BackButton(),
+        leading: BackButton(color: Colors.white),
         title: Row(
           children: [
             CircleAvatar(
-              backgroundColor: Colors.grey.shade300,
-              child: Icon(Icons.person, color: Colors.white),
+              backgroundColor: Colors.grey.shade800,
+              child: const Icon(Icons.person, color: Colors.white),
             ),
             const SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(widget.friend.name, style: const TextStyle(fontSize: 16)),
+                Text(widget.friend.name, style: const TextStyle(fontSize: 16, color: Colors.white)),
                 const Text("Active recently", style: TextStyle(fontSize: 11, color: Colors.white70)),
               ],
             ),
@@ -301,15 +305,12 @@ class _ChatScreenState extends State<ChatScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          IconButton(icon: const Icon(Icons.call), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.videocam), onPressed: () {}),
+          IconButton(icon: const Icon(Icons.call, color: Colors.white), onPressed: () {}),
+          IconButton(icon: const Icon(Icons.videocam, color: Colors.white), onPressed: () {}),
         ],
       ),
-      backgroundColor: Colors.transparent,
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(colors: [Color(0xFF10243A), Color(0xFF3A6EA5)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        ),
+        decoration: const BoxDecoration(gradient: AuthTheme.backgroundGradient),
         child: SafeArea(
           child: Column(
             children: [
@@ -327,7 +328,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         margin: const EdgeInsets.symmetric(vertical: 6),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
-                          color: isMe ? Colors.blueAccent : Colors.white.withOpacity(0.08),
+                          color: isMe ? Colors.blueAccent : Colors.white.withOpacity(0.06),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(msg["text"], style: const TextStyle(color: Colors.white)),
@@ -336,44 +337,45 @@ class _ChatScreenState extends State<ChatScreen> {
                   },
                 ),
               ),
-              // input
+
+              // input area placed in a rounded card so it matches other pages
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.03),
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        child: Row(
-                          children: [
-                            IconButton(icon: const Icon(Icons.add, color: Colors.white70), onPressed: () {}),
-                            Expanded(
-                              child: TextField(
-                                controller: _ctrl,
-                                style: const TextStyle(color: Colors.white),
-                                decoration: const InputDecoration(
-                                  hintText: 'Write a message...',
-                                  hintStyle: TextStyle(color: Colors.white70),
-                                  border: InputBorder.none,
-                                ),
-                              ),
-                            ),
-                            IconButton(icon: const Icon(Icons.emoji_emotions, color: Colors.white70), onPressed: () {}),
-                          ],
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.03),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(icon: const Icon(Icons.add, color: Colors.white70), onPressed: () {}),
+                      Expanded(
+                        child: TextField(
+                          controller: _ctrl,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(
+                            hintText: 'Write a message...',
+                            hintStyle: TextStyle(color: Colors.white70),
+                            border: InputBorder.none,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    FloatingActionButton(
-                      mini: true,
-                      onPressed: _send,
-                      child: const Icon(Icons.send),
-                    )
-                  ],
+                      IconButton(icon: const Icon(Icons.emoji_emotions, color: Colors.white70), onPressed: () {}),
+                      GestureDetector(
+                        onTap: _send,
+                        child: Container(
+                          margin: const EdgeInsets.only(left: 6),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.blueAccent,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.send, color: Colors.white, size: 18),
+                        ),
+                      )
+                    ],
+                  ),
                 ),
               ),
             ],
