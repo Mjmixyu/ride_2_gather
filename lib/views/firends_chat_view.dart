@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-// Simple friend and post models (can be replaced with actual data)
+// Simple friend and post models (kept from original)
 class Friend {
   final String name;
   final bool online;
@@ -37,8 +37,8 @@ class FriendsChatView extends StatefulWidget {
 class _FriendsChatViewState extends State<FriendsChatView> {
   List<Friend> friends = [
     Friend(name: "Helena Hills", online: true, avatarUrl: ""),
-    Friend(name: "Helena Hills", online: true, avatarUrl: ""),
-    Friend(name: "Helena Hills", online: true, avatarUrl: ""),
+    Friend(name: "Daniel Smith", online: false, avatarUrl: ""),
+    Friend(name: "Ava Reed", online: true, avatarUrl: ""),
   ];
 
   List<FriendPost> posts = [
@@ -53,174 +53,229 @@ class _FriendsChatViewState extends State<FriendsChatView> {
     ),
     FriendPost(
       imageUrl: "https://images.unsplash.com/photo-1518717758536-85ae29035b6d",
-      author: "Daniel",
-      group: "Group Name",
-      text: "",
-      likes: 0,
-      comments: 0,
-      timeAgo: "2 hrs ago",
-    ),
-    FriendPost(
-      imageUrl: "https://images.unsplash.com/photo-1465101046530-73398c7f28ca",
-      author: "Daniel",
-      group: "Group Name",
-      text: "",
-      likes: 0,
-      comments: 0,
-      timeAgo: "2 hrs ago",
+      author: "Helena",
+      group: "Riders",
+      text: "Check out this ride!",
+      likes: 14,
+      comments: 4,
+      timeAgo: "4 hrs ago",
     ),
   ];
 
   String searchQuery = "";
 
-  void openChat(Friend friend) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ChatPage(friend: friend),
+  @override
+  Widget build(BuildContext context) {
+    // Reuse the same visual language as the FeedView (gradient background + dark rounded card)
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF10243A),
+              Color(0xFF3A6EA5),
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // header row
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: Colors.black54,
+                      child: const Icon(Icons.people, color: Colors.white70),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        "Friends",
+                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.search, color: Colors.white70),
+                      onPressed: () {},
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.person_add_alt, color: Colors.white70),
+                      onPressed: () {},
+                    ),
+                  ],
+                ),
+              ),
+
+              // container card like feed
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.04),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.45),
+                          blurRadius: 14,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                      border: Border.all(color: Colors.white.withOpacity(0.02)),
+                    ),
+                    child: Column(
+                      children: [
+                        // search field and quick actions
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.03),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  child: TextField(
+                                    onChanged: (val) => setState(() => searchQuery = val),
+                                    style: const TextStyle(color: Colors.white),
+                                    decoration: const InputDecoration(
+                                      hintText: 'Search friends',
+                                      hintStyle: TextStyle(color: Colors.white70),
+                                      border: InputBorder.none,
+                                      icon: Icon(Icons.search, color: Colors.white70),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white.withOpacity(0.06),
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                onPressed: () {},
+                                child: const Text('New'),
+                              )
+                            ],
+                          ),
+                        ),
+
+                        const Divider(color: Colors.white12, height: 1),
+
+                        // friends list
+                        Expanded(
+                          child: ListView.separated(
+                            padding: const EdgeInsets.all(12),
+                            itemCount: friends.where((f) => f.name.toLowerCase().contains(searchQuery.toLowerCase())).length,
+                            separatorBuilder: (_, __) => const Divider(color: Colors.white12),
+                            itemBuilder: (context, index) {
+                              final filtered = friends.where((f) => f.name.toLowerCase().contains(searchQuery.toLowerCase())).toList();
+                              final friend = filtered[index];
+                              return ListTile(
+                                leading: CircleAvatar(
+                                  radius: 25,
+                                  backgroundColor: Colors.grey.shade800,
+                                  child: const Icon(Icons.person, size: 28, color: Colors.white70),
+                                ),
+                                title: Text(friend.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                                subtitle: Text(friend.online ? "Active recently" : "Offline", style: const TextStyle(color: Colors.white70)),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.chat_bubble_outline, color: Colors.white70),
+                                  onPressed: () {},
+                                ),
+                                onTap: () => openChat(friend),
+                              );
+                            },
+                          ),
+                        ),
+
+                        const Divider(color: Colors.white12, height: 1),
+
+                        // friends' latest posts horizontal
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Friends\' latest posts', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                height: 120,
+                                child: ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: posts.length,
+                                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                                  itemBuilder: (context, i) {
+                                    final p = posts[i];
+                                    return ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Image.network(p.imageUrl, width: 160, height: 120, fit: BoxFit.cover, errorBuilder: (_, __, ___) {
+                                        return Container(width: 160, height: 120, color: Colors.grey.shade800, child: const Icon(Icons.broken_image, color: Colors.white70));
+                                      }),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    List<Friend> filteredFriends = friends
-        .where((f) => f.name.toLowerCase().contains(searchQuery.toLowerCase()))
-        .toList();
-
-    return ListView(
-      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: 'search user ...',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(30)),
-              isDense: true,
-              contentPadding: EdgeInsets.symmetric(vertical: 8),
-              fillColor: Colors.grey.shade100,
-              filled: true,
-            ),
-            onChanged: (val) => setState(() => searchQuery = val),
-          ),
-        ),
-        // Friends List
-        ...filteredFriends.map((friend) => ListTile(
-          leading: CircleAvatar(
-            radius: 25,
-            backgroundColor: Colors.grey.shade300,
-            child: Icon(Icons.person, size: 28, color: Colors.white),
-          ),
-          title: Text(friend.name, style: TextStyle(fontWeight: FontWeight.w500)),
-          subtitle: Text(friend.online ? "Active 11m ago" : "Offline", style: TextStyle(fontSize: 12)),
-          trailing: IconButton(
-            icon: Icon(Icons.chat_bubble_outline),
-            onPressed: () => openChat(friend),
-          ),
-          onTap: () => openChat(friend),
-        )),
-        // Friends' Posts Images (horizontal scroll)
-        Padding(
-          padding: const EdgeInsets.only(left: 12.0, top: 12, bottom: 4),
-          child: Text("(shows user friends latest posts)", style: TextStyle(fontSize: 13, color: Colors.grey)),
-        ),
-        SizedBox(
-          height: 110,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: posts
-                .map((p) => Container(
-              margin: EdgeInsets.symmetric(horizontal: 6),
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                image: DecorationImage(
-                  image: NetworkImage(p.imageUrl),
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ))
-                .toList(),
-          ),
-        ),
-        // Detailed Post Card (Instagram style)
-        Card(
-          margin: EdgeInsets.all(12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: Colors.deepPurpleAccent,
-                      child: Icon(Icons.person, color: Colors.white),
-                    ),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        "${posts[0].author} in ${posts[0].group}",
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                    Text(posts[0].timeAgo, style: TextStyle(color: Colors.grey, fontSize: 12)),
-                  ],
-                ),
-                SizedBox(height: 10),
-                Text(posts[0].text),
-                SizedBox(height: 10),
-                Row(
-                  children: [
-                    Icon(Icons.favorite_border, size: 18),
-                    SizedBox(width: 4),
-                    Text("${posts[0].likes} likes"),
-                    SizedBox(width: 12),
-                    Icon(Icons.comment_outlined, size: 18),
-                    SizedBox(width: 4),
-                    Text("${posts[0].comments} comments"),
-                    Spacer(),
-                    Icon(Icons.notifications_none),
-                    SizedBox(width: 6),
-                    Icon(Icons.more_horiz),
-                  ],
-                )
-              ],
-            ),
-          ),
-        ),
-        SizedBox(height: 16),
-      ],
-    );
+  void openChat(Friend friend) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatScreen(friend: friend)));
   }
 }
 
-// Chat page popup
-class ChatPage extends StatefulWidget {
+class ChatScreen extends StatefulWidget {
   final Friend friend;
-  const ChatPage({super.key, required this.friend});
+  const ChatScreen({super.key, required this.friend});
 
   @override
-  State<ChatPage> createState() => _ChatPageState();
+  State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatPageState extends State<ChatPage> {
+class _ChatScreenState extends State<ChatScreen> {
   List<Map<String, dynamic>> messages = [
-    {"text": "This is the main chat template", "isMe": true, "time": "Nov 30, 2023, 9:41 AM"},
-    {"text": "Oh?", "isMe": false},
-    {"text": "Cool", "isMe": false},
-    {"text": "How does it work?", "isMe": false},
-    {"text": "You just edit any text to type in the conversation you want to show, and delete any bubbles you don't want to use", "isMe": true},
-    {"text": "Boom!", "isMe": true},
-    {"text": "Hmmm", "isMe": false},
-    {"text": "I think I get it", "isMe": false},
-    {"text": "Will head to the Help Center if I have more questions tho", "isMe": false},
+    {"text": "Hey, you free for a ride?", "isMe": false},
+    {"text": "Yes! When?", "isMe": true},
+    {"text": "This Sunday morning?", "isMe": false},
   ];
 
-  final TextEditingController _controller = TextEditingController();
+  final TextEditingController _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _send() {
+    if (_ctrl.text.trim().isEmpty) return;
+    setState(() {
+      messages.add({"text": _ctrl.text.trim(), "isMe": true});
+      _ctrl.clear();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -233,87 +288,97 @@ class _ChatPageState extends State<ChatPage> {
               backgroundColor: Colors.grey.shade300,
               child: Icon(Icons.person, color: Colors.white),
             ),
-            SizedBox(width: 10),
+            const SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(widget.friend.name, style: TextStyle(fontSize: 16)),
-                Text("Active 11m ago", style: TextStyle(fontSize: 11, color: Colors.grey)),
+                Text(widget.friend.name, style: const TextStyle(fontSize: 16)),
+                const Text("Active recently", style: TextStyle(fontSize: 11, color: Colors.white70)),
               ],
             ),
           ],
         ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         actions: [
-          IconButton(icon: Icon(Icons.call), onPressed: () {}),
-          IconButton(icon: Icon(Icons.videocam), onPressed: () {}),
+          IconButton(icon: const Icon(Icons.call), onPressed: () {}),
+          IconButton(icon: const Icon(Icons.videocam), onPressed: () {}),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16.0),
-              itemCount: messages.length,
-              itemBuilder: (context, index) {
-                var msg = messages[index];
-                bool isMe = msg["isMe"];
-                return Column(
-                  crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                  children: [
-                    if (msg["time"] != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8.0),
-                        child: Text(msg["time"], style: TextStyle(color: Colors.grey, fontSize: 12)),
+      backgroundColor: Colors.transparent,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(colors: [Color(0xFF10243A), Color(0xFF3A6EA5)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16.0),
+                  reverse: false,
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    final msg = messages[index];
+                    final isMe = msg["isMe"] as bool;
+                    return Align(
+                      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isMe ? Colors.blueAccent : Colors.white.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(msg["text"], style: const TextStyle(color: Colors.white)),
                       ),
-                    Container(
-                      margin: EdgeInsets.symmetric(vertical: 2),
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: isMe ? Colors.black : Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        msg["text"],
-                        style: TextStyle(color: isMe ? Colors.white : Colors.black),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    decoration: InputDecoration(
-                      hintText: "Message...",
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 8),
-                IconButton(
-                  icon: Icon(Icons.send),
-                  onPressed: () {
-                    if (_controller.text.isNotEmpty) {
-                      setState(() {
-                        messages.add({"text": _controller.text, "isMe": true});
-                        _controller.clear();
-                      });
-                    }
+                    );
                   },
                 ),
-                IconButton(icon: Icon(Icons.attach_file), onPressed: () {}),
-                IconButton(icon: Icon(Icons.camera_alt), onPressed: () {}),
-              ],
-            ),
+              ),
+              // input
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.03),
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Row(
+                          children: [
+                            IconButton(icon: const Icon(Icons.add, color: Colors.white70), onPressed: () {}),
+                            Expanded(
+                              child: TextField(
+                                controller: _ctrl,
+                                style: const TextStyle(color: Colors.white),
+                                decoration: const InputDecoration(
+                                  hintText: 'Write a message...',
+                                  hintStyle: TextStyle(color: Colors.white70),
+                                  border: InputBorder.none,
+                                ),
+                              ),
+                            ),
+                            IconButton(icon: const Icon(Icons.emoji_emotions, color: Colors.white70), onPressed: () {}),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FloatingActionButton(
+                      mini: true,
+                      onPressed: _send,
+                      child: const Icon(Icons.send),
+                    )
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

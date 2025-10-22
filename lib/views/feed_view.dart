@@ -1,4 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import '../services/post_repository.dart';
+import '../models/post.dart';
+import '../theme/auth_theme.dart';
 
 class FeedView extends StatefulWidget {
   final String username;
@@ -10,30 +15,57 @@ class FeedView extends StatefulWidget {
   State<FeedView> createState() => _FeedViewState();
 }
 
-//state of the feed with it'S widgets - showing placeholders for now
 class _FeedViewState extends State<FeedView> {
   final PageController _pageController = PageController(viewportFraction: 0.78);
-  final List<String> _postImages = List.generate(
-    5,
-        (i) => 'https://picsum.photos/seed/moto$i/800/600', // placeholder images
-  );
+  final List<String> _messages = [
+    "message text here?",
+    "message text here?",
+  ];
 
-  final List<Map<String, String>> _news = List.generate(1, (i) {
-    return {
-      "title": "Title news #$i",
-      "excerpt":
-      "Some really interesting stuff happening right now. This is a short summary of the news item #$i.",
-      "thumb": "https://picsum.photos/seed/news$i/200/140",
-    };
-  });
+  final List<Map<String, String>> _news = [
+    {
+      "title": "title news",
+      "excerpt": "some really interesting stuff that's happening rn",
+      "thumb": "https://picsum.photos/seed/news1/400/240",
+    }
+  ];
+
+  List<Post> _posts = [];
+  List<Post> _userImagePosts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    PostRepository.instance.addListener(_onRepoUpdated);
+    _refreshFromRepo();
+  }
+
+  void _refreshFromRepo() {
+    final all = PostRepository.instance.posts;
+    _posts = all;
+    // carousel should show recent image posts from the currently signed-in user
+    _userImagePosts = all
+        .where((p) => p.author == widget.username && p.mediaPath != null && p.mediaType == 'image')
+        .toList();
+    // newest first (repository keeps newest-first but ensure)
+    _userImagePosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  void _onRepoUpdated() {
+    if (mounted) {
+      setState(() {
+        _refreshFromRepo();
+      });
+    }
+  }
 
   @override
   void dispose() {
     _pageController.dispose();
+    PostRepository.instance.removeListener(_onRepoUpdated);
     super.dispose();
   }
 
-  //function that calculates spacing of the page
   double _calculateScale(int index) {
     if (!_pageController.hasClients || _pageController.positions.isEmpty) return 1.0;
     final page = _pageController.page ?? _pageController.initialPage.toDouble();
@@ -41,181 +73,218 @@ class _FeedViewState extends State<FeedView> {
     return (1 - (diff * 0.16)).clamp(0.82, 1.0);
   }
 
+  String _formatTimeAgo(DateTime t) {
+    final diff = DateTime.now().difference(t);
+    if (diff.inMinutes < 2) return "now";
+    if (diff.inHours < 1) return "${diff.inMinutes}m";
+    if (diff.inDays < 1) return "${diff.inHours}h";
+    return "${diff.inDays}d";
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
+    // Keep the original layout exactly, but change only the background to the auth/login gradient.
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Top Title Row
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      "ride2gather",
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                    ),
-                    InkWell(
-                      onTap: widget.onProfileTap,
-                      child: const Icon(Icons.person_outline, size: 28),
-                    ),
-                  ],
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: AuthTheme.backgroundGradient,
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top Title Row
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "ride2gather",
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      GestureDetector(
+                        onTap: widget.onProfileTap,
+                        child: const CircleAvatar(child: Icon(Icons.person_outline)),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
 
-              // Recent user posts (carousel view)
-              SizedBox(
-                height: 240,
-                child: PageView.builder(
-                  controller: _pageController,
-                  itemCount: _postImages.length,
-                  itemBuilder: (context, index) {
-                    return AnimatedBuilder(
-                      animation: _pageController,
-                      builder: (context, child) {
-                        final scale = _calculateScale(index);
-                        final verticalOffset = (1 - scale) * 16;
-                        return Transform.translate(
-                          offset: Offset(0, verticalOffset),
-                          child: Transform.scale(scale: scale, child: child),
-                        );
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade300,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.12),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                              image: DecorationImage(
-                                image: NetworkImage(_postImages[index]),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            child: Align(
-                              alignment: Alignment.bottomLeft,
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [Colors.black.withOpacity(0.55), Colors.transparent],
-                                    begin: Alignment.bottomCenter,
-                                    end: Alignment.center,
+                const SizedBox(height: 8),
+
+                // Centered carousel / featured area (large, rounded cards layered)
+                SizedBox(
+                  height: 180,
+                  child: _buildUserCarousel(size),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Simple messages list (small avatar + text lines)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                  child: Column(
+                    children: List.generate(_messages.length, (idx) {
+                      return Column(
+                        children: [
+                          ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 4.0),
+                            leading: const CircleAvatar(child: Icon(Icons.person_outline)),
+                            title: Text(_messages[idx], style: TextStyle(color: Colors.white)),
+                            subtitle: const Text("short subtitle or metadata", style: TextStyle(color: Colors.white70)),
+                            onTap: () {},
+                          ),
+                          const Divider(height: 1, color: Colors.white10),
+                        ],
+                      );
+                    }),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // News / featured card (image left, text right)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: _news.map((item) {
+                      return InkWell(
+                        onTap: () {},
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.white.withOpacity(0.03)),
+                          ),
+                          child: Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.network(
+                                  item["thumb"]!,
+                                  width: size.width * 0.52,
+                                  height: 90,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    width: size.width * 0.52,
+                                    height: 90,
+                                    color: Colors.grey[300],
+                                    child: const Icon(Icons.image, size: 36),
                                   ),
                                 ),
-                                child: Text(
-                                  "Post #$index",
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(item["title"] ?? "No title", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                    const SizedBox(height: 6),
+                                    Text(item["excerpt"] ?? "", maxLines: 4, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70)),
+                                  ],
                                 ),
                               ),
-                            ),
+                            ],
                           ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    }).toList(),
+                  ),
                 ),
-              ),
 
-              const SizedBox(height: 6),
+                const SizedBox(height: 12),
 
-              // Recent messages from users
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
-                child: Column(
-                  children: List.generate(3, (idx) {
-                    return Column(
-                      children: [
-                        ListTile(
-                          leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-                          title: const Text("message text here?"),
-                          subtitle: const Text("short subtitle or metadata"),
-                          onTap: () {},
-                        ),
-                        const Divider(height: 1),
-                      ],
-                    );
-                  }),
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              // News feed
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "News",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _news.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final item = _news[index];
-                        return InkWell(
-                          onTap: () {},
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
+                // User posts area: show posts from repository (newest first)
+                if (_posts.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                    child: Column(
+                      children: List.generate(_posts.length, (i) {
+                        final post = _posts[i];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12.0),
+                          child: Card(
+                            color: Colors.white.withOpacity(0.04),
+                            margin: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Image.network(
-                                    item["thumb"]!,
-                                    width: size.width * 0.28,
-                                    height: 78,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      width: size.width * 0.28,
-                                      height: 78,
-                                      color: Colors.grey[300],
-                                      child: const Icon(Icons.image, size: 36),
-                                    ),
+                                // header
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  child: Row(
+                                    children: [
+                                      const CircleAvatar(child: Icon(Icons.person_outline)),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(post.author, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                            Text(_formatTimeAgo(post.createdAt), style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                                          ],
+                                        ),
+                                      ),
+                                      IconButton(icon: const Icon(Icons.more_horiz, color: Colors.white70), onPressed: () {}),
+                                    ],
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+
+                                if (post.text.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    child: Text(post.text, style: const TextStyle(color: Colors.white)),
+                                  ),
+
+                                if (post.mediaPath != null && post.mediaType == "image")
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.file(
+                                      File(post.mediaPath!),
+                                      width: double.infinity,
+                                      height: 220,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        height: 180,
+                                        color: Colors.grey[300],
+                                        child: const Icon(Icons.broken_image, size: 64),
+                                      ),
+                                    ),
+                                  ),
+
+                                if (post.mediaPath != null && post.mediaType == "video")
+                                  Container(
+                                    height: 160,
+                                    color: Colors.grey.shade200,
+                                    child: const Center(child: Icon(Icons.videocam, size: 48)),
+                                  ),
+
+                                // small action row
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                  child: Row(
                                     children: [
-                                      Text(
-                                        item["title"] ?? "No title",
-                                        style: const TextStyle(fontWeight: FontWeight.bold),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        item["excerpt"] ?? "",
-                                        maxLines: 3,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 13, color: Colors.black87),
-                                      ),
+                                      IconButton(icon: const Icon(Icons.favorite_border, color: Colors.white70), onPressed: () {}),
+                                      const SizedBox(width: 8),
+                                      IconButton(icon: const Icon(Icons.chat_bubble_outline, color: Colors.white70), onPressed: () {}),
+                                      const Spacer(),
+                                      if (post.locationName != null)
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.location_on_outlined, size: 16, color: Colors.white70),
+                                            const SizedBox(width: 4),
+                                            Text(post.locationName!, style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                                          ],
+                                        )
                                     ],
                                   ),
                                 ),
@@ -223,17 +292,75 @@ class _FeedViewState extends State<FeedView> {
                             ),
                           ),
                         );
-                      },
+                      }),
+                    ),
+                  ),
+
+                const SizedBox(height: 36), // spacing before bottom nav
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserCarousel(Size size) {
+    // If user has recent image posts, show them; otherwise show placeholder cards (keeps original layout)
+    if (_userImagePosts.isEmpty) {
+      return PageView.builder(
+        controller: _pageController,
+        itemCount: 5,
+        itemBuilder: (context, index) {
+          final scale = _calculateScale(index);
+          return Transform.scale(
+            scale: scale,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
               ),
+            ),
+          );
+        },
+      );
+    }
 
-              const SizedBox(height: 24),
-            ],
+    return PageView.builder(
+      controller: _pageController,
+      itemCount: _userImagePosts.length,
+      itemBuilder: (context, index) {
+        final post = _userImagePosts[index];
+        final scale = _calculateScale(index);
+        return Transform.scale(
+          scale: scale,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: post.mediaPath != null
+                  ? Image.file(
+                File(post.mediaPath!),
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                errorBuilder: (_, __, ___) => Container(color: Colors.grey.shade200),
+              )
+                  : Container(color: Colors.grey.shade200),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
