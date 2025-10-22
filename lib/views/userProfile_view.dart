@@ -35,6 +35,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
   String _pfp = '';
   bool _loading = true;
 
+  // only picture posts (mediaType == 'image' && mediaPath != null)
   List<Post> _posts = [];
 
   @override
@@ -44,7 +45,12 @@ class _UserProfilePageState extends State<UserProfilePage> {
     _bike = widget.bike;
     _pfp = widget.pfpUrl;
     _fetchUser();
-    _posts = PostRepository.instance.posts.where((p) => p.author == widget.username).toList();
+
+    // Only include image posts for this profile
+    _posts = PostRepository.instance.posts
+        .where((p) => p.author == widget.username && p.mediaPath != null && p.mediaType == 'image')
+        .toList();
+
     PostRepository.instance.addListener(_repoUpdated);
   }
 
@@ -57,7 +63,9 @@ class _UserProfilePageState extends State<UserProfilePage> {
   void _repoUpdated() {
     if (mounted) {
       setState(() {
-        _posts = PostRepository.instance.posts.where((p) => p.author == widget.username).toList();
+        _posts = PostRepository.instance.posts
+            .where((p) => p.author == widget.username && p.mediaPath != null && p.mediaType == 'image')
+            .toList();
       });
     }
   }
@@ -80,7 +88,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
           }
         });
       } else {
-        // show error (optional)
+        // optional: handle error
       }
     } catch (e) {
       // ignore for now
@@ -91,6 +99,102 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
   // Determine whether the current viewer is the profile owner
   bool get isOwnProfile => widget.viewerUsername != null && widget.viewerUsername == widget.username;
+
+  void _openPostDetail(Post post) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Media preview (image only here)
+              if (post.mediaPath != null && post.mediaType == 'image')
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                  child: Image.file(
+                    File(post.mediaPath!),
+                    width: double.infinity,
+                    height: 300,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 300,
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.broken_image, size: 64),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+                    color: Colors.white,
+                  ),
+                  child: const SizedBox.shrink(),
+                ),
+
+              // Post text / metadata
+              Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const CircleAvatar(child: Icon(Icons.person_outline)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(post.author, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              Text(
+                                _formatTimeAgo(post.createdAt),
+                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(icon: const Icon(Icons.more_horiz), onPressed: () {}),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    if (post.text.isNotEmpty) Text(post.text),
+                    if (post.locationName != null) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on_outlined, size: 16, color: Colors.grey),
+                          const SizedBox(width: 6),
+                          Text(post.locationName!, style: const TextStyle(color: Colors.grey)),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close')),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatTimeAgo(DateTime t) {
+    final diff = DateTime.now().difference(t);
+    if (diff.inMinutes < 2) return "now";
+    if (diff.inHours < 1) return "${diff.inMinutes}m";
+    if (diff.inDays < 1) return "${diff.inHours}h";
+    return "${diff.inDays}d";
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -270,7 +374,6 @@ class _UserProfilePageState extends State<UserProfilePage> {
                                                     return const Icon(Icons.motorcycle, size: 80, color: Colors.black);
                                                   }),
                                                   const SizedBox(height: 8),
-                                                  // Text(_bike, style: const TextStyle(fontSize: 14, color: Colors.black)),
                                                 ],
                                               );
                                             } else {
@@ -298,7 +401,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
                             const SizedBox(height: 12),
 
-                            // Posts grid - use real posts from the repository
+                            // Posts grid - show only image posts
                             Expanded(
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 8.0),
@@ -311,7 +414,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
                                       children: const [
                                         Icon(Icons.photo_library, size: 64, color: Colors.white70),
                                         SizedBox(height: 12),
-                                        Text('No posts yet', style: TextStyle(color: Colors.white70)),
+                                        Text('No picture posts yet', style: TextStyle(color: Colors.white70)),
                                       ],
                                     ),
                                   ),
@@ -326,28 +429,22 @@ class _UserProfilePageState extends State<UserProfilePage> {
                                   itemCount: _posts.length,
                                   itemBuilder: (context, index) {
                                     final post = _posts[index];
-                                    if (post.mediaPath != null && post.mediaType == "image") {
-                                      return ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Image.file(File(post.mediaPath!), fit: BoxFit.cover),
-                                      );
-                                    } else if (post.mediaPath != null && post.mediaType == "video") {
-                                      return Container(
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey.shade800,
-                                          borderRadius: BorderRadius.circular(12),
+
+                                    // IMAGE post
+                                    return GestureDetector(
+                                      onTap: () => _openPostDetail(post),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.file(
+                                          File(post.mediaPath!),
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => Container(
+                                            color: Colors.grey.shade700,
+                                            child: const Center(child: Icon(Icons.broken_image, color: Colors.white70)),
+                                          ),
                                         ),
-                                        child: const Center(child: Icon(Icons.videocam, color: Colors.white70)),
-                                      );
-                                    } else {
-                                      return Container(
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey.shade400,
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: const Icon(Icons.text_snippet, color: Colors.white),
-                                      );
-                                    }
+                                      ),
+                                    );
                                   },
                                 ),
                               ),
