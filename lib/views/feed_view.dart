@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../services/post_repository.dart';
 import '../models/post.dart';
 import '../theme/auth_theme.dart';
+import 'post_viewer.dart';
 
 class FeedView extends StatefulWidget {
   final String username;
@@ -47,7 +48,7 @@ class _FeedViewState extends State<FeedView> {
     _userImagePosts = all
         .where((p) => p.author == widget.username && p.mediaPath != null && p.mediaType == 'image')
         .toList();
-    // newest first (repository keeps newest-first but ensure)
+    // newest first
     _userImagePosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
@@ -136,7 +137,7 @@ class _FeedViewState extends State<FeedView> {
                           ListTile(
                             contentPadding: const EdgeInsets.symmetric(horizontal: 4.0),
                             leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-                            title: Text(_messages[idx], style: TextStyle(color: Colors.white)),
+                            title: Text(_messages[idx], style: const TextStyle(color: Colors.white)),
                             subtitle: const Text("short subtitle or metadata", style: TextStyle(color: Colors.white70)),
                             onTap: () {},
                           ),
@@ -202,99 +203,8 @@ class _FeedViewState extends State<FeedView> {
 
                 const SizedBox(height: 12),
 
-                // User posts area: show posts from repository (newest first)
-                if (_posts.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                    child: Column(
-                      children: List.generate(_posts.length, (i) {
-                        final post = _posts[i];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12.0),
-                          child: Card(
-                            color: Colors.white.withOpacity(0.04),
-                            margin: EdgeInsets.zero,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // header
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                  child: Row(
-                                    children: [
-                                      const CircleAvatar(child: Icon(Icons.person_outline)),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(post.author, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                                            Text(_formatTimeAgo(post.createdAt), style: const TextStyle(fontSize: 12, color: Colors.white70)),
-                                          ],
-                                        ),
-                                      ),
-                                      IconButton(icon: const Icon(Icons.more_horiz, color: Colors.white70), onPressed: () {}),
-                                    ],
-                                  ),
-                                ),
-
-                                if (post.text.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    child: Text(post.text, style: const TextStyle(color: Colors.white)),
-                                  ),
-
-                                if (post.mediaPath != null && post.mediaType == "image")
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Image.file(
-                                      File(post.mediaPath!),
-                                      width: double.infinity,
-                                      height: 220,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
-                                        height: 180,
-                                        color: Colors.grey[300],
-                                        child: const Icon(Icons.broken_image, size: 64),
-                                      ),
-                                    ),
-                                  ),
-
-                                if (post.mediaPath != null && post.mediaType == "video")
-                                  Container(
-                                    height: 160,
-                                    color: Colors.grey.shade200,
-                                    child: const Center(child: Icon(Icons.videocam, size: 48)),
-                                  ),
-
-                                // small action row
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                  child: Row(
-                                    children: [
-                                      IconButton(icon: const Icon(Icons.favorite_border, color: Colors.white70), onPressed: () {}),
-                                      const SizedBox(width: 8),
-                                      IconButton(icon: const Icon(Icons.chat_bubble_outline, color: Colors.white70), onPressed: () {}),
-                                      const Spacer(),
-                                      if (post.locationName != null)
-                                        Row(
-                                          children: [
-                                            const Icon(Icons.location_on_outlined, size: 16, color: Colors.white70),
-                                            const SizedBox(width: 4),
-                                            Text(post.locationName!, style: const TextStyle(fontSize: 12, color: Colors.white70)),
-                                          ],
-                                        )
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
+                // NOTE: posts under the news have been removed (per your request).
+                // If you later want to re-enable a posts list under news, re-insert the posts UI here.
 
                 const SizedBox(height: 36), // spacing before bottom nav
               ],
@@ -346,17 +256,27 @@ class _FeedViewState extends State<FeedView> {
           scale: scale,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: post.mediaPath != null
-                  ? Image.file(
-                File(post.mediaPath!),
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: double.infinity,
-                errorBuilder: (_, __, ___) => Container(color: Colors.grey.shade200),
-              )
-                  : Container(color: Colors.grey.shade200),
+            child: GestureDetector(
+              onTap: () {
+                // navigate to full-screen post viewer starting at this post
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => PostViewerPage(posts: _userImagePosts, initialIndex: index),
+                  ),
+                );
+              },
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: post.mediaPath != null
+                    ? Image.file(
+                  File(post.mediaPath!),
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  errorBuilder: (_, __, ___) => Container(color: Colors.grey.shade200),
+                )
+                    : Container(color: Colors.grey.shade200),
+              ),
             ),
           ),
         );
