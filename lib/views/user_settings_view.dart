@@ -1,7 +1,10 @@
 // lib/views/user_settings_page.dart
-// Updated to use Bike enum list from models/bike.dart instead of the hardcoded bikeTypes list.
+// Now supports selecting and uploading a profile picture (pfp).
+// Uses ImagePicker to select an image, previews it locally, then uploads to server before saving other settings.
 
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../theme/auth_theme.dart';
 import '../models/bike.dart';
 import '../core/auth_api.dart';
@@ -33,12 +36,17 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
   bool _saving = false;
   final _formKey = GlobalKey<FormState>();
 
+  // PFP
+  File? _pickedImageFile;
+  final ImagePicker _picker = ImagePicker();
+
   @override
   void initState() {
     super.initState();
     _usernameController = TextEditingController(text: widget.username);
     _bioController = TextEditingController(text: widget.bio);
     _bikeType = widget.bike.isNotEmpty ? widget.bike : null;
+    _pickedImageFile = null;
   }
 
   @override
@@ -48,11 +56,52 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
     super.dispose();
   }
 
+  Future<void> _pickPfp() async {
+    try {
+      final XFile? file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 85,
+      );
+      if (file != null) {
+        setState(() {
+          _pickedImageFile = File(file.path);
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error picking image: $e')));
+    }
+  }
+
+  void _onRemovePickedImage() {
+    setState(() => _pickedImageFile = null);
+  }
+
+  void _onChangePfp() {
+    // Open the picker
+    _pickPfp();
+  }
+
   void _onSave() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
 
     try {
+      // If user picked a new image, upload it first. The server endpoint will update user.pfp.
+      if (_pickedImageFile != null) {
+        final up = await AuthApi.uploadPfp(userId: widget.userId, imageFile: _pickedImageFile!);
+        if (up['ok'] != true) {
+          final err = (up['error'] ?? 'Upload failed').toString();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload error: $err')));
+            setState(() => _saving = false);
+          }
+          return;
+        }
+        // upload succeeded, server already set pfp; we continue to update bio/bike below
+      }
+
       // call API to update bio and bike (bike name is saved as provided)
       final result = await AuthApi.updateUserSettings(
         userId: widget.userId,
@@ -63,7 +112,6 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
       if (result['ok'] == true) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved')));
-          // Return true so caller can refresh
           Navigator.of(context).pop(true);
         }
       } else {
@@ -79,13 +127,6 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
-  }
-
-  void _onChangePfp() {
-    // Placeholder: UI only. In real app you would open image picker and upload.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Change PFP tapped (image picker not implemented here)')),
-    );
   }
 
   @override
@@ -104,14 +145,23 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Column(
               children: [
-                // Top banner with pfp (if provided) to keep visual consistency with profile
+                // Top banner with pfp (preview if new image picked, otherwise remote)
                 SizedBox(
                   height: topBannerHeight,
                   width: double.infinity,
                   child: Stack(
                     children: [
                       Positioned.fill(
-                        child: widget.pfpUrl.isNotEmpty
+                        child: _pickedImageFile != null
+                            ? ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(
+                            _pickedImageFile!,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                          ),
+                        )
+                            : (widget.pfpUrl.isNotEmpty
                             ? ClipRRect(
                           borderRadius: BorderRadius.circular(12),
                           child: Image.network(
@@ -125,7 +175,7 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
                             color: const Color(0xFF000080),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                        ),
+                        )),
                       ),
                       // Small overlay showing that the user can change their PFP
                       Positioned(
@@ -136,9 +186,12 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
                             CircleAvatar(
                               radius: 28,
                               backgroundColor: Colors.white,
-                              backgroundImage:
-                              widget.pfpUrl.isNotEmpty ? NetworkImage(widget.pfpUrl) as ImageProvider : null,
-                              child: widget.pfpUrl.isEmpty ? const Icon(Icons.person, size: 32, color: Colors.black54) : null,
+                              backgroundImage: _pickedImageFile != null
+                                  ? FileImage(_pickedImageFile!) as ImageProvider
+                                  : (widget.pfpUrl.isNotEmpty ? NetworkImage(widget.pfpUrl) as ImageProvider : null),
+                              child: (widget.pfpUrl.isEmpty && _pickedImageFile == null)
+                                  ? const Icon(Icons.person, size: 32, color: Colors.black54)
+                                  : null,
                             ),
                             const SizedBox(width: 12),
                             Column(
@@ -146,10 +199,20 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
                               children: [
                                 const Text('Profile Picture',
                                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                TextButton.icon(
-                                  onPressed: _onChangePfp,
-                                  icon: const Icon(Icons.upload_file, color: Colors.white),
-                                  label: const Text('Change PFP', style: TextStyle(color: Colors.white)),
+                                Row(
+                                  children: [
+                                    TextButton.icon(
+                                      onPressed: _onChangePfp,
+                                      icon: const Icon(Icons.photo_library, color: Colors.white),
+                                      label: const Text('Change PFP', style: TextStyle(color: Colors.white)),
+                                    ),
+                                    if (_pickedImageFile != null)
+                                      TextButton.icon(
+                                        onPressed: _onRemovePickedImage,
+                                        icon: const Icon(Icons.delete, color: Colors.white),
+                                        label: const Text('Remove', style: TextStyle(color: Colors.white)),
+                                      ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -195,7 +258,7 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
                         ),
                         const SizedBox(height: 12),
 
-                        // Bike type dropdown — now using Bike enum list
+                        // Bike dropdown with small thumbnails (ResizeImage used by profile view too)
                         DropdownButtonFormField<String>(
                           value: _bikeType,
                           dropdownColor: const Color(0xFF1A1A3C),
@@ -212,11 +275,11 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
                                 SizedBox(
                                   height: 20,
                                   width: 20,
-                                  child: Image.asset(
-                                    '${b.assetPath}.png',
+                                  child: Image(
+                                    image: ResizeImage(AssetImage('${b.assetPath}.png'), width: 60),
                                     fit: BoxFit.contain,
                                     errorBuilder: (context, error, stackTrace) =>
-                                    const Icon(Icons.pedal_bike, size: 18, color: Colors.white),
+                                    const Icon(Icons.motorcycle, size: 18, color: Colors.white),
                                   ),
                                 ),
                                 const SizedBox(width: 8),

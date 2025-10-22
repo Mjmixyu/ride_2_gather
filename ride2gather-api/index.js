@@ -4,12 +4,37 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');                // <= pure JS, safer on Windows
 const { PrismaClient } = require('@prisma/client');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
 const app = express();
 const prisma = new PrismaClient({ log: ['query', 'warn', 'error'] });
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '5mb' }));
+
+// Ensure uploads directory exists and serve it statically
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
+
+// multer storage config (simple disk storage)
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadsDir),
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname) || '';
+        const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+        cb(null, name);
+    },
+});
+const upload = multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB limit
+});
 
 //health
 app.get('/', (_req, res) => res.json({ ok: true, service: 'ride2gather-api' }));
@@ -103,11 +128,6 @@ app.post('/login', async (req, res) => {
 
 /**
  * Get user by username (including their primary bike info if set)
- * returns 200 with user object or 404 if not found
- * user object example:
- * {
- *   id, email, username, bio, pfp, country_code, myBikeId, myBike: { id, name, image }
- * }
  */
 app.get('/user/:username', async (req, res) => {
     try {
@@ -117,7 +137,6 @@ app.get('/user/:username', async (req, res) => {
             include: { myBike: true }
         });
         if (!user) return res.status(404).json({ error: 'User not found' });
-        // return selected fields only
         const out = {
             id: user.id,
             email: user.email,
@@ -136,14 +155,7 @@ app.get('/user/:username', async (req, res) => {
 });
 
 /**
- * Update user settings (bio and bike)
- * Accepts JSON body: { bio?: string, bike_name?: string }
- *
- * Note: Prisma.upsert requires a unique field in `where`. In this project's Prisma schema the Bike.name
- * field is not marked unique, so upsert({ where: { name } }) fails.  To avoid that we:
- *  - try to find a Bike by name (findFirst)
- *  - if found, reuse it
- *  - otherwise create a new Bike row (create)
+ * Update user settings (bio and bike) - find or create bike by name (name not unique in schema)
  */
 app.patch('/user/:id', async (req, res) => {
     try {
@@ -165,11 +177,9 @@ app.patch('/user/:id', async (req, res) => {
             } else {
                 const bikeName = String(bike_name).trim();
 
-                // Try to find an existing bike with this name (name is not unique in schema,
-                // so we cannot upsert by name). If none found, create a new bike row.
+                // Try to find an existing bike with this name
                 let bike = await prisma.bike.findFirst({
                     where: { name: bikeName },
-                    // optionally include other distinguishing fields if you want
                 });
 
                 if (!bike) {
@@ -199,6 +209,37 @@ app.patch('/user/:id', async (req, res) => {
         });
     } catch (e) {
         console.error('UPDATE_USER_ERROR:', e);
+        return res.status(500).json({ error: e?.message || 'server error' });
+    }
+});
+
+/**
+ * Upload / change profile picture
+ * Accepts multipart/form-data with field 'pfp'
+ * Updates user.pfp to point to a served /uploads/<filename> URL.
+ */
+app.post('/user/:id/pfp', upload.single('pfp'), async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) return res.status(400).json({ error: 'invalid user id' });
+        if (!req.file) return res.status(400).json({ error: 'no file uploaded (field name must be "pfp")' });
+
+        // Build accessible URL for the uploaded file
+        const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+
+        // Update user record
+        const updated = await prisma.user.update({
+            where: { id },
+            data: { pfp: fileUrl },
+        });
+
+        return res.json({
+            ok: true,
+            id: updated.id,
+            pfp: updated.pfp,
+        });
+    } catch (e) {
+        console.error('UPLOAD_PFP_ERROR:', e);
         return res.status(500).json({ error: e?.message || 'server error' });
     }
 });
