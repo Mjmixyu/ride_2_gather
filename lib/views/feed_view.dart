@@ -1,13 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import '../core/auth_api.dart';
 import '../services/post_repository.dart';
 import '../models/post.dart';
 import '../theme/auth_theme.dart';
 import 'post_viewer.dart';
 
 class FeedView extends StatefulWidget {
-  final String username;
+  final String username; // logged-in username
   final VoidCallback onProfileTap;
 
   const FeedView({super.key, required this.username, required this.onProfileTap});
@@ -18,46 +19,72 @@ class FeedView extends StatefulWidget {
 
 class _FeedViewState extends State<FeedView> {
   final PageController _pageController = PageController(viewportFraction: 0.78);
-  final List<String> _messages = [
-    "message text here?",
-    "message text here?",
-  ];
 
+  // Keep a single featured news item (title + excerpt) shown in content
   final List<Map<String, String>> _news = [
     {
       "title": "title news",
       "excerpt": "some really interesting stuff that's happening rn",
-      "thumb": "https://picsum.photos/seed/news1/400/240",
     }
   ];
 
   List<Post> _posts = [];
   List<Post> _userImagePosts = [];
+  List<Post> _textPosts = [];
+
+  // Cache of username -> pfpUrl (null = not yet fetched, empty string = no pfp)
+  final Map<String, String?> _pfpCache = {};
 
   @override
   void initState() {
     super.initState();
     PostRepository.instance.addListener(_onRepoUpdated);
     _refreshFromRepo();
+
+    // Ensure we have the logged-in user's pfp for the top-right profile button
+    _fetchAndCachePfp(widget.username);
+  }
+
+  Future<void> _fetchAndCachePfp(String username) async {
+    if (username.isEmpty) return;
+    // avoid duplicate requests
+    if (_pfpCache.containsKey(username)) return;
+
+    // mark as fetching
+    _pfpCache[username] = null;
+    try {
+      final res = await AuthApi.getUserByUsername(username);
+      if (res['ok'] == true && res['data'] != null) {
+        final pfp = (res['data']['pfp'] ?? '') as String;
+        _pfpCache[username] = pfp.isNotEmpty ? pfp : '';
+      } else {
+        _pfpCache[username] = '';
+      }
+    } catch (_) {
+      _pfpCache[username] = '';
+    }
+    if (mounted) setState(() {});
   }
 
   void _refreshFromRepo() {
     final all = PostRepository.instance.posts;
     _posts = all;
-    // carousel should show recent image posts from the currently signed-in user
+
+    // carousel: recent image posts from the currently signed-in user
     _userImagePosts = all
         .where((p) => p.author == widget.username && p.mediaPath != null && p.mediaType == 'image')
         .toList();
-    // newest first
     _userImagePosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    // text posts: those without media (or explicitly text) — newest first
+    _textPosts = all
+        .where((p) => (p.mediaPath == null || p.mediaType == null || p.mediaType == 'text'))
+        .toList();
+    _textPosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   void _onRepoUpdated() {
-    if (mounted) {
-      setState(() {
-        _refreshFromRepo();
-      });
-    }
+    if (mounted) setState(_refreshFromRepo);
   }
 
   @override
@@ -82,12 +109,34 @@ class _FeedViewState extends State<FeedView> {
     return "${diff.inDays}d";
   }
 
+  Widget _avatarFor(String username, {double radius = 20}) {
+    // If we haven't fetched pfp yet, start fetch (fire-and-forget)
+    if (!_pfpCache.containsKey(username)) {
+      _fetchAndCachePfp(username);
+      // show placeholder until we have result
+      return CircleAvatar(radius: radius, child: const Icon(Icons.person_outline));
+    }
+
+    final val = _pfpCache[username];
+    if (val == null) {
+      // fetching in progress -> placeholder
+      return CircleAvatar(radius: radius, child: const Icon(Icons.person_outline));
+    }
+
+    if (val.isNotEmpty) {
+      return CircleAvatar(radius: radius, backgroundImage: NetworkImage(val));
+    }
+
+    // empty string => no pfp -> fallback avatar
+    return CircleAvatar(radius: radius, child: const Icon(Icons.person_outline));
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    // Keep the original layout exactly, but change only the background to the auth/login gradient.
     return Scaffold(
+      // removed bottomNavigationBar as requested previously; keep news in-content
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -96,10 +145,12 @@ class _FeedViewState extends State<FeedView> {
         ),
         child: SafeArea(
           child: SingleChildScrollView(
+            // small bottom padding to avoid overlapping by navigation controls
+            padding: const EdgeInsets.only(bottom: 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top Title Row
+                // Top Title Row: show logged-in user's pfp on the right (routing uses onProfileTap)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12),
                   child: Row(
@@ -111,7 +162,7 @@ class _FeedViewState extends State<FeedView> {
                       ),
                       GestureDetector(
                         onTap: widget.onProfileTap,
-                        child: const CircleAvatar(child: Icon(Icons.person_outline)),
+                        child: _avatarFor(widget.username, radius: 18),
                       ),
                     ],
                   ),
@@ -127,38 +178,29 @@ class _FeedViewState extends State<FeedView> {
 
                 const SizedBox(height: 12),
 
-                // Simple messages list (small avatar + text lines)
+                // Middle messages list — fixed-height scrollable area that shows up to ~3 items at once.
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                  child: Column(
-                    children: List.generate(_messages.length, (idx) {
-                      return Column(
-                        children: [
-                          ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 4.0),
-                            leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-                            title: Text(_messages[idx], style: const TextStyle(color: Colors.white)),
-                            subtitle: const Text("short subtitle or metadata", style: TextStyle(color: Colors.white70)),
-                            onTap: () {},
-                          ),
-                          const Divider(height: 1, color: Colors.white10),
-                        ],
-                      );
-                    }),
-                  ),
+                  child: _buildScrollableTextPosts(),
                 ),
 
                 const SizedBox(height: 12),
 
-                // News / featured card (image left, text right)
+                // Keep the single featured news card (title + excerpt) in content
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: _news.map((item) {
+                      final title = item['title'] ?? 'No title';
+                      final excerpt = item['excerpt'] ?? '';
                       return InkWell(
-                        onTap: () {},
+                        onTap: () {
+                          // simple feedback — you can open a details page or link here
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(title)));
+                        },
                         child: Container(
+                          width: double.infinity,
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.06),
@@ -167,18 +209,18 @@ class _FeedViewState extends State<FeedView> {
                           ),
                           child: Row(
                             children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(10),
-                                child: Image.network(
-                                  item["thumb"]!,
-                                  width: size.width * 0.52,
-                                  height: 90,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    width: size.width * 0.52,
-                                    height: 90,
-                                    color: Colors.grey[300],
-                                    child: const Icon(Icons.image, size: 36),
+                              // left tile with text "News" to replace an image
+                              Container(
+                                width: size.width * 0.36,
+                                height: 90,
+                                decoration: BoxDecoration(
+                                  color: Colors.deepPurple.shade300.withOpacity(0.18),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Center(
+                                  child: Text(
+                                    'News',
+                                    style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold),
                                   ),
                                 ),
                               ),
@@ -187,9 +229,9 @@ class _FeedViewState extends State<FeedView> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(item["title"] ?? "No title", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                                     const SizedBox(height: 6),
-                                    Text(item["excerpt"] ?? "", maxLines: 4, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70)),
+                                    Text(excerpt, maxLines: 4, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70)),
                                   ],
                                 ),
                               ),
@@ -201,12 +243,7 @@ class _FeedViewState extends State<FeedView> {
                   ),
                 ),
 
-                const SizedBox(height: 12),
-
-                // NOTE: posts under the news have been removed (per your request).
-                // If you later want to re-enable a posts list under news, re-insert the posts UI here.
-
-                const SizedBox(height: 36), // spacing before bottom nav
+                const SizedBox(height: 36), // spacing before bottom of page
               ],
             ),
           ),
@@ -215,8 +252,75 @@ class _FeedViewState extends State<FeedView> {
     );
   }
 
+  Widget _buildScrollableTextPosts() {
+    if (_textPosts.isEmpty) {
+      return Column(
+        children: [
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4.0),
+            leading: _avatarFor(widget.username),
+            title: const Text('No recent messages', style: TextStyle(color: Colors.white)),
+            subtitle: const Text("There are no text posts yet", style: TextStyle(color: Colors.white70)),
+            onTap: () {},
+          ),
+          const Divider(height: 1, color: Colors.white10),
+        ],
+      );
+    }
+
+    // Approximate ListTile height; adjust if your theme changes.
+    const double itemHeight = 72.0;
+    final int visibleCount = _textPosts.length < 3 ? _textPosts.length : 3;
+    final double height = (visibleCount * itemHeight) + 2.0;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.01),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: SizedBox(
+        height: height,
+        child: ListView.separated(
+          padding: EdgeInsets.zero,
+          physics: const ClampingScrollPhysics(),
+          itemCount: _textPosts.length,
+          separatorBuilder: (_, __) => const Divider(height: 1, color: Colors.white10),
+          itemBuilder: (context, index) {
+            final post = _textPosts[index];
+
+            // Ensure we attempt to fetch the author's pfp if not already cached.
+            if (!_pfpCache.containsKey(post.author)) {
+              _fetchAndCachePfp(post.author);
+            }
+
+            return SizedBox(
+              height: itemHeight,
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4.0),
+                leading: _avatarFor(post.author),
+                title: Text(post.text, style: const TextStyle(color: Colors.white)),
+                subtitle: Text('${post.author} • ${_formatTimeAgo(post.createdAt)}', style: const TextStyle(color: Colors.white70)),
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: Text(post.author),
+                      content: Text(post.text),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _buildUserCarousel(Size size) {
-    // If user has recent image posts, show them; otherwise show placeholder cards (keeps original layout)
     if (_userImagePosts.isEmpty) {
       return PageView.builder(
         controller: _pageController,
@@ -258,7 +362,6 @@ class _FeedViewState extends State<FeedView> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             child: GestureDetector(
               onTap: () {
-                // navigate to full-screen post viewer starting at this post
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => PostViewerPage(posts: _userImagePosts, initialIndex: index),

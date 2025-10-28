@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
 import 'dart:io';
+
+import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/post_repository.dart';
 import '../theme/auth_theme.dart';
@@ -15,24 +16,55 @@ class AddPostView extends StatefulWidget {
 class _AddPostViewState extends State<AddPostView> {
   File? _mediaFile;
   String _mediaType = ""; // "image", "video", or ""
-  final _textController = TextEditingController();
-  final _bioController = TextEditingController();
+  final TextEditingController _textController = TextEditingController();
 
   final ImagePicker _picker = ImagePicker();
   bool _submitting = false;
+  bool _canPost = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _textController.addListener(_updateCanPost);
+    _updateCanPost();
+  }
+
+  @override
+  void dispose() {
+    _textController.removeListener(_updateCanPost);
+    _textController.dispose();
+    super.dispose();
+  }
+
+  void _updateCanPost() {
+    final hasText = _textController.text.trim().isNotEmpty;
+    final hasMedia = _mediaFile != null;
+    final newState = hasText || hasMedia;
+    if (newState != _canPost) {
+      setState(() {
+        _canPost = newState;
+      });
+    }
+  }
 
   Future<void> _pickMediaFromGallery({required bool isVideo}) async {
     XFile? pickedFile;
-    if (isVideo) {
-      pickedFile = await _picker.pickVideo(source: ImageSource.gallery);
-    } else {
-      pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    try {
+      if (isVideo) {
+        pickedFile = await _picker.pickVideo(source: ImageSource.gallery);
+      } else {
+        pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+      }
+    } catch (e) {
+      pickedFile = null;
     }
+
     if (pickedFile != null) {
       setState(() {
         _mediaFile = File(pickedFile!.path);
         _mediaType = isVideo ? "video" : "image";
       });
+      _updateCanPost();
     }
   }
 
@@ -79,48 +111,45 @@ class _AddPostViewState extends State<AddPostView> {
     }
   }
 
-  Future<void> _submitPost() async {
-    if (_submitting) return;
-    setState(() => _submitting = true);
+  void _removeMedia() {
+    setState(() {
+      _mediaFile = null;
+      _mediaType = "";
+    });
+    _updateCanPost();
+  }
 
+  Future<void> _submitPost() async {
+    if (!_canPost || _submitting) return;
+
+    setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
     final textContent = _textController.text.trim();
-    final bio = _bioController.text.trim();
 
     try {
       await PostRepository.instance.addPost(
         author: widget.author,
-        text: textContent.isEmpty ? bio : textContent,
+        text: textContent,
         mediaFile: _mediaFile,
-        mediaType: _mediaType,
+        mediaType: _mediaType.isNotEmpty ? _mediaType : '',
       );
 
       if (!mounted) return;
-
       messenger.showSnackBar(const SnackBar(content: Text('Post created')));
 
-      // request HomeFeed to switch back to feed (tab index 0)
       PostRepository.instance.tabRequest.value = 0;
 
-      // reset UI
       setState(() {
         _mediaFile = null;
         _mediaType = "";
         _textController.clear();
-        _bioController.clear();
+        _canPost = false;
       });
     } catch (e) {
       if (mounted) messenger.showSnackBar(SnackBar(content: Text('Failed to create post: $e')));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
-  }
-
-  @override
-  void dispose() {
-    _textController.dispose();
-    _bioController.dispose();
-    super.dispose();
   }
 
   @override
@@ -158,18 +187,34 @@ class _AddPostViewState extends State<AddPostView> {
                       child: Text('Create New Post', style: TextStyle(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                     const SizedBox(height: 12),
-                    Center(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white.withOpacity(0.06),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white.withOpacity(0.06),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                          ),
+                          icon: const Icon(Icons.add_photo_alternate),
+                          label: const Text('Add Media'),
+                          onPressed: _showAddMediaSheet,
                         ),
-                        icon: const Icon(Icons.add_photo_alternate),
-                        label: const Text('Add Media'),
-                        onPressed: _showAddMediaSheet,
-                      ),
+                        const SizedBox(width: 12),
+                        if (_mediaFile != null)
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white.withOpacity(0.04),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            ),
+                            icon: const Icon(Icons.delete_outline),
+                            label: const Text('Remove'),
+                            onPressed: _removeMedia,
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     if (_mediaFile != null)
@@ -202,8 +247,14 @@ class _AddPostViewState extends State<AddPostView> {
                         padding: MaterialStateProperty.all(const EdgeInsets.symmetric(vertical: 14)),
                         shape: MaterialStateProperty.all(RoundedRectangleBorder(borderRadius: BorderRadius.circular(28))),
                       ),
-                      onPressed: (_mediaFile == null && _textController.text.isEmpty) || _submitting ? null : _submitPost,
-                      child: Text(_submitting ? 'Posting...' : 'Post'),
+                      onPressed: (_canPost && !_submitting) ? _submitPost : null,
+                      child: _submitting
+                          ? Row(mainAxisSize: MainAxisSize.min, children: const [
+                        SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white)),
+                        SizedBox(width: 12),
+                        Text('Posting...')
+                      ])
+                          : const Text('Post'),
                     ),
                   ],
                 ),
