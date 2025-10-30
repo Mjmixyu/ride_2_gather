@@ -16,24 +16,23 @@ import 'package:mime/mime.dart';
 import 'package:http_parser/http_parser.dart';
 
 /// A collection of static methods to call the authentication-related server endpoints.
+///
+/// NOTE: Methods now accept an optional http.Client? client parameter (default null).
+/// This keeps production behavior unchanged while allowing tests to inject a MockClient.
 class AuthApi {
   static const String _base = 'http://10.0.2.2:3000';
 
   /// Sends a signup request to the server and returns the parsed response.
-  ///
-  /// @param email The new user's email address.
-  /// @param username The desired username.
-  /// @param password The desired password.
-  /// @param countryCode Optional country code string.
-  /// @return A map with 'ok' true and 'data' on success, or 'ok' false and 'error' message on failure.
   static Future<Map<String, dynamic>> signup({
     required String email,
     required String username,
     required String password,
     String countryCode = "",
+    http.Client? client,
   }) async {
+    final c = client ?? http.Client();
     final uri = Uri.parse('$_base/signup');
-    final res = await http.post(
+    final res = await c.post(
       uri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -52,16 +51,14 @@ class AuthApi {
   }
 
   /// Sends a login request using either username or email as the identity.
-  ///
-  /// @param identity The username or email used to log in.
-  /// @param password The user's password.
-  /// @return A map with 'ok' true and 'data' on success, or 'ok' false and 'error' message on failure.
   static Future<Map<String, dynamic>> login({
     required String identity,
     required String password,
+    http.Client? client,
   }) async {
+    final c = client ?? http.Client();
     final uri = Uri.parse('$_base/login');
-    final res = await http.post(
+    final res = await c.post(
       uri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'identity': identity, 'password': password}),
@@ -75,14 +72,13 @@ class AuthApi {
   }
 
   /// Retrieves a user's public profile by username.
-  ///
-  /// This may include additional information such as the user's chosen bike details.
-  ///
-  /// @param username The username to look up.
-  /// @return A map with 'ok' true and 'data' on success, or 'ok' false and 'error' message on failure.
-  static Future<Map<String, dynamic>> getUserByUsername(String username) async {
+  static Future<Map<String, dynamic>> getUserByUsername(
+    String username, {
+    http.Client? client,
+  }) async {
+    final c = client ?? http.Client();
     final uri = Uri.parse('$_base/user/$username');
-    final res = await http.get(uri);
+    final res = await c.get(uri);
     final body = jsonDecode(res.body.isEmpty ? '{}' : res.body);
     if (res.statusCode == 200) {
       return {'ok': true, 'data': body};
@@ -92,20 +88,15 @@ class AuthApi {
   }
 
   /// Updates the given user's settings such as bio and selected bike name.
-  ///
-  /// Providing a null or empty [bikeName] will clear any existing bike selection.
-  ///
-  /// @param userId The numeric ID of the user to update.
-  /// @param bio Optional bio text to set.
-  /// @param bikeName Optional bike name to set or clear.
-  /// @return A map with 'ok' true and 'data' on success, or 'ok' false and 'error' message on failure.
   static Future<Map<String, dynamic>> updateUserSettings({
     required int userId,
     String? bio,
     String? bikeName,
+    http.Client? client,
   }) async {
+    final c = client ?? http.Client();
     final uri = Uri.parse('$_base/user/$userId');
-    final res = await http.patch(
+    final res = await c.patch(
       uri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'bio': bio, 'bike_name': bikeName}),
@@ -119,17 +110,13 @@ class AuthApi {
   }
 
   /// Uploads a profile picture file using multipart/form-data.
-  ///
-  /// The server expects the file field to be named 'pfp'. The function sets
-  /// the content type based on the file mime type when possible.
-  ///
-  /// @param userId The numeric ID of the user whose profile picture is being uploaded.
-  /// @param imageFile The image File to upload.
-  /// @return A map with 'ok' true and 'data' on success, or 'ok' false and 'error' message on failure.
   static Future<Map<String, dynamic>> uploadPfp({
     required int userId,
     required File imageFile,
+    http.Client? client,
   }) async {
+    // MultipartRequest currently requires the real http.Client for send(); if a MockClient is used in tests,
+    // tests should stub/override upload behavior or use a http.IOClient/Mocking approach that supports Multipart.
     final uri = Uri.parse('$_base/user/$userId/pfp');
     final request = http.MultipartRequest('POST', uri);
 
@@ -142,7 +129,9 @@ class AuthApi {
     );
     request.files.add(multipartFile);
 
-    final streamed = await request.send();
+    // Use provided client if it has send, otherwise fallback to default new Client()
+    final http.Client c = client ?? http.Client();
+    final streamed = await c.send(request);
     final res = await http.Response.fromStream(streamed);
     final body = jsonDecode(res.body.isEmpty ? '{}' : res.body);
     if (res.statusCode == 200) {
