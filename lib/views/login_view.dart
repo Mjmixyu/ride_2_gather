@@ -1,3 +1,12 @@
+/**
+ * login_view.dart
+ *
+ * File-level Dartdoc:
+ * Provides the login screen UI where users enter their username/email and
+ * password. Validates input, calls the AuthApi.login function, and on success
+ * navigates to the home feed. Uses shared AuthTheme styles and a simple UI
+ * controller to toggle password visibility.
+ */
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controller/simple_ui_controller.dart';
@@ -6,6 +15,10 @@ import '../core/auth_api.dart';
 import '../core/homeFeed_routing.dart';
 import 'signup_view.dart';
 
+/// LoginView is a stateful widget that renders the login form.
+///
+/// It collects identity (username or email) and password, validates them,
+/// performs the login network call, and navigates to HomeFeed on success.
 class LoginView extends StatefulWidget {
   const LoginView({Key? key}) : super(key: key);
 
@@ -14,7 +27,7 @@ class LoginView extends StatefulWidget {
 }
 
 class _LoginViewState extends State<LoginView> {
-  final TextEditingController identityController = TextEditingController(); // username OR email
+  final TextEditingController identityController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _loading = false;
@@ -46,7 +59,6 @@ class _LoginViewState extends State<LoginView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Logo (rounded)
                     Container(
                       width: 120,
                       height: 120,
@@ -73,8 +85,6 @@ class _LoginViewState extends State<LoginView> {
                     const SizedBox(height: 6),
                     const Text('Login to your account', style: AuthTheme.subtitleStyle),
                     const SizedBox(height: 35),
-
-                    // Rounded background container (match SignUp)
                     Container(
                       padding: const EdgeInsets.all(25),
                       decoration: BoxDecoration(
@@ -90,7 +100,6 @@ class _LoginViewState extends State<LoginView> {
                       ),
                       child: Column(
                         children: [
-                          // Identity (username or email)
                           TextFormField(
                             controller: identityController,
                             style: const TextStyle(color: Colors.white),
@@ -106,8 +115,6 @@ class _LoginViewState extends State<LoginView> {
                             },
                           ),
                           const SizedBox(height: 18),
-
-                          // Password
                           Obx(
                                 () => TextFormField(
                               controller: passwordController,
@@ -136,8 +143,6 @@ class _LoginViewState extends State<LoginView> {
                             ),
                           ),
                           const SizedBox(height: 28),
-
-                          // Button
                           SizedBox(
                             width: double.infinity,
                             height: 55,
@@ -171,7 +176,8 @@ class _LoginViewState extends State<LoginView> {
                                   } else {
                                     final err = (result['error'] ?? 'Login failed').toString();
                                     if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(SnackBar(content: Text(err)));
                                     }
                                   }
                                 } catch (e) {
@@ -201,7 +207,6 @@ class _LoginViewState extends State<LoginView> {
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 28),
                     GestureDetector(
                       onTap: () {

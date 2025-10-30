@@ -1,12 +1,31 @@
+/**
+ * auth_api.dart
+ *
+ * File-level Dartdoc:
+ * Provides API helper methods for user authentication and profile actions.
+ * This file contains a single AuthApi class with static methods to signup,
+ * login, fetch user data, update user settings, and upload profile pictures.
+ *
+ * Each method returns a Map<String, dynamic> with an 'ok' boolean and either
+ * 'data' or 'error' fields to indicate success or failure.
+ */
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
 import 'package:http_parser/http_parser.dart';
 
+/// A collection of static methods to call the authentication-related server endpoints.
 class AuthApi {
   static const String _base = 'http://10.0.2.2:3000';
 
+  /// Sends a signup request to the server and returns the parsed response.
+  ///
+  /// @param email The new user's email address.
+  /// @param username The desired username.
+  /// @param password The desired password.
+  /// @param countryCode Optional country code string.
+  /// @return A map with 'ok' true and 'data' on success, or 'ok' false and 'error' message on failure.
   static Future<Map<String, dynamic>> signup({
     required String email,
     required String username,
@@ -32,7 +51,11 @@ class AuthApi {
     return {'ok': false, 'error': msg};
   }
 
-  // LOGIN: identity = username OR email
+  /// Sends a login request using either username or email as the identity.
+  ///
+  /// @param identity The username or email used to log in.
+  /// @param password The user's password.
+  /// @return A map with 'ok' true and 'data' on success, or 'ok' false and 'error' message on failure.
   static Future<Map<String, dynamic>> login({
     required String identity,
     required String password,
@@ -51,7 +74,12 @@ class AuthApi {
     return {'ok': false, 'error': msg};
   }
 
-  // Fetch user by username (includes myBike info if set)
+  /// Retrieves a user's public profile by username.
+  ///
+  /// This may include additional information such as the user's chosen bike details.
+  ///
+  /// @param username The username to look up.
+  /// @return A map with 'ok' true and 'data' on success, or 'ok' false and 'error' message on failure.
   static Future<Map<String, dynamic>> getUserByUsername(String username) async {
     final uri = Uri.parse('$_base/user/$username');
     final res = await http.get(uri);
@@ -63,7 +91,14 @@ class AuthApi {
     return {'ok': false, 'error': msg};
   }
 
-  // Update user settings (bio & bike_name). bikeName may be null/empty to clear selection.
+  /// Updates the given user's settings such as bio and selected bike name.
+  ///
+  /// Providing a null or empty [bikeName] will clear any existing bike selection.
+  ///
+  /// @param userId The numeric ID of the user to update.
+  /// @param bio Optional bio text to set.
+  /// @param bikeName Optional bike name to set or clear.
+  /// @return A map with 'ok' true and 'data' on success, or 'ok' false and 'error' message on failure.
   static Future<Map<String, dynamic>> updateUserSettings({
     required int userId,
     String? bio,
@@ -83,8 +118,14 @@ class AuthApi {
     return {'ok': false, 'error': msg};
   }
 
-  // Upload profile picture (multipart/form-data) to API.
-  // Field name on server must be 'pfp'.
+  /// Uploads a profile picture file using multipart/form-data.
+  ///
+  /// The server expects the file field to be named 'pfp'. The function sets
+  /// the content type based on the file mime type when possible.
+  ///
+  /// @param userId The numeric ID of the user whose profile picture is being uploaded.
+  /// @param imageFile The image File to upload.
+  /// @return A map with 'ok' true and 'data' on success, or 'ok' false and 'error' message on failure.
   static Future<Map<String, dynamic>> uploadPfp({
     required int userId,
     required File imageFile,

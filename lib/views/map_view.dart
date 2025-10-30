@@ -1,3 +1,12 @@
+/**
+ * map_view.dart
+ *
+ * File-level Dartdoc:
+ * Map view that displays map tiles, user pins, and author overlays. Reads
+ * pins and posts from PostRepository and computes overlays for authors'
+ * latest geo-tagged posts. Allows adding pins and tapping markers to view
+ * details. Uses flutter_map with OpenStreetMap tiles.
+ */
 import 'dart:async';
 import 'dart:ui';
 
@@ -10,6 +19,10 @@ import '../core/auth_api.dart';
 import '../services/post_repository.dart';
 import '../models/post.dart';
 
+/// MapView widget that shows a map with pins and author markers.
+///
+/// It loads cached posts/pins from the repository, computes overlay widget
+/// positions and handles taps/long-presses for viewing or creating pins.
 class MapView extends StatefulWidget {
   const MapView({super.key});
 
@@ -19,19 +32,14 @@ class MapView extends StatefulWidget {
 
 class _MapViewState extends State<MapView> {
   final MapController _mapController = MapController();
-  LatLng _center = const LatLng(48.2082, 16.3738); // Austria (Vienna) default
+  LatLng _center = const LatLng(48.2082, 16.3738);
   double _zoom = 11.0;
 
   List<Post> _posts = [];
   List<MapPin> _pins = [];
 
-  // cache username -> pfpUrl (null = fetching, '' = none)
   final Map<String, String?> _pfpCache = {};
-
-  // overlay pixel positions for each author's latest-location
   final Map<String, Offset> _overlayOffsets = {};
-
-  // used for distance hit-testing
   final Distance _distance = const Distance();
 
   StreamSubscription<MapEvent>? _mapEventSub;
@@ -42,12 +50,9 @@ class _MapViewState extends State<MapView> {
     _loadInitialBounds();
     _refreshFromRepo();
     PostRepository.instance.addListener(_onRepoUpdated);
-
-    // listen to map events to update overlay positions after panning/zooming
     _mapEventSub = _mapController.mapEventStream?.listen((_) {
       _updateOverlays();
     });
-    // try update overlays after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) => _updateOverlays());
   }
 
@@ -58,6 +63,7 @@ class _MapViewState extends State<MapView> {
     super.dispose();
   }
 
+  /// Load a preferred initial map center from stored country code if available.
   Future<void> _loadInitialBounds() async {
     try {
       final code = await PostRepository.instance.getStoredCountryCode();
@@ -74,11 +80,10 @@ class _MapViewState extends State<MapView> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _mapController.move(_center, _zoom);
       });
-    } catch (_) {
-      // keep defaults
-    }
+    } catch (_) {}
   }
 
+  /// Convert a two-letter country code into a reasonable LatLng center.
   LatLng _centerFromCountryCode(String? code) {
     if (code == null || code.isEmpty) return const LatLng(48.2082, 16.3738);
     switch (code.toUpperCase()) {
@@ -112,6 +117,7 @@ class _MapViewState extends State<MapView> {
     }
   }
 
+  /// Refresh local posts and pins from the PostRepository and prefetch pfps.
   void _refreshFromRepo() {
     final all = PostRepository.instance.posts;
     final pins = PostRepository.instance.pins;
@@ -120,7 +126,6 @@ class _MapViewState extends State<MapView> {
       _pins = pins;
     });
 
-    // prefetch pfps for authors and update overlays
     for (final p in _posts) {
       if (p.author.isNotEmpty && !_pfpCache.containsKey(p.author)) _fetchAndCachePfp(p.author);
     }
@@ -131,6 +136,7 @@ class _MapViewState extends State<MapView> {
     if (mounted) _refreshFromRepo();
   }
 
+  /// Fetch a user's profile picture and cache the result to avoid repeated calls.
   Future<void> _fetchAndCachePfp(String username) async {
     if (username.isEmpty) return;
     if (_pfpCache.containsKey(username)) return;
@@ -147,11 +153,10 @@ class _MapViewState extends State<MapView> {
       _pfpCache[username] = '';
     }
     if (mounted) setState(() {});
-    // update overlay positions because the pfp availability may affect overlays UI
     WidgetsBinding.instance.addPostFrameCallback((_) => _updateOverlays());
   }
 
-  // Build latest-by-author map with lat/lon
+  /// Build a map of the most recent post per author that includes location.
   Map<String, Post> _latestByAuthorWithLocation() {
     final Map<String, Post> latestByAuthor = {};
     for (final p in _posts) {
@@ -162,9 +167,8 @@ class _MapViewState extends State<MapView> {
     return latestByAuthor;
   }
 
-  // Update overlay pixel offsets for each author with a lat/lon
+  /// Compute screen-space offsets for overlays based on map projection.
   void _updateOverlays() {
-    // try to compute only when map controller is ready
     try {
       final latest = _latestByAuthorWithLocation();
       final Map<String, Offset> newOffsets = {};
@@ -173,14 +177,10 @@ class _MapViewState extends State<MapView> {
         final post = entry.value;
         if (post.lat == null || post.lon == null) continue;
         try {
-          // latLngToScreenPoint returns CustomPoint<double> with x,y in pixels relative to map widget
           final screenPoint = _mapController.latLngToScreenPoint(LatLng(post.lat!, post.lon!));
-          // place the overlay centered on that point (we will offset by half overlay size when positioning)
           newOffsets[author] = Offset(screenPoint.x.toDouble(), screenPoint.y.toDouble());
-        } catch (_) {
-        }
+        } catch (_) {}
       }
-      // apply new offsets
       if (mounted) {
         setState(() {
           _overlayOffsets
@@ -193,10 +193,10 @@ class _MapViewState extends State<MapView> {
     }
   }
 
+  /// Handle taps on the map: open pin sheet or post sheet when near a marker.
   void _handleTap(LatLng tapped) {
-    const thresholdMeters = 60; // hit radius in meters
+    const thresholdMeters = 60;
 
-    // pins: nearest
     MapPin? nearestPin;
     double nearestPinDist = double.infinity;
     for (final pin in _pins) {
@@ -211,7 +211,6 @@ class _MapViewState extends State<MapView> {
       return;
     }
 
-    // posts (latest by author)
     MapEntry<String, Post>? nearestPostEntry;
     double nearestPostDist = double.infinity;
     final latest = _latestByAuthorWithLocation();
@@ -229,6 +228,7 @@ class _MapViewState extends State<MapView> {
     }
   }
 
+  /// Show a bottom sheet with details for a post marker.
   void _openPostMarkerSheet(Post post) {
     final authorPfp = _pfpCache[post.author];
     showModalBottomSheet(
@@ -268,6 +268,7 @@ class _MapViewState extends State<MapView> {
     );
   }
 
+  /// Show a bottom sheet with details for a map pin.
   void _openPinSheet(MapPin pin) {
     showModalBottomSheet(
       context: context,
@@ -295,6 +296,7 @@ class _MapViewState extends State<MapView> {
     );
   }
 
+  /// Format a DateTime to a short "time ago" string for display.
   String _formatTimeAgo(DateTime t) {
     final diff = DateTime.now().difference(t);
     if (diff.inMinutes < 2) return "now";
@@ -303,6 +305,7 @@ class _MapViewState extends State<MapView> {
     return "${diff.inDays}d";
   }
 
+  /// Prompt the user to add a pin at the given position using a dialog.
   Future<void> _onLongPressAddPin(LatLng pos) async {
     final nameCtrl = TextEditingController();
     final textCtrl = TextEditingController();
@@ -337,7 +340,7 @@ class _MapViewState extends State<MapView> {
     }
   }
 
-  // Add pin at current map center
+  /// Add a pin at the current center of the map.
   Future<void> _addPinAtCenter() async {
     LatLng centerPos = _center;
     try {
@@ -349,7 +352,6 @@ class _MapViewState extends State<MapView> {
 
   @override
   Widget build(BuildContext context) {
-    // build latest-by-author and pin circles for rendering in CircleLayer(s)
     final latest = _latestByAuthorWithLocation();
     final pinCircles = _pins.map((pin) {
       return CircleMarker(
@@ -370,7 +372,6 @@ class _MapViewState extends State<MapView> {
       );
     }).toList();
 
-    // create overlay widgets for each author that has a computed offset
     final overlayWidgets = <Widget>[];
     const double overlaySize = 40.0;
     _overlayOffsets.forEach((author, offset) {
@@ -382,7 +383,6 @@ class _MapViewState extends State<MapView> {
         height: overlaySize,
         child: GestureDetector(
           onTap: () {
-            // open the author's latest post sheet
             final post = latest[author];
             if (post != null) _openPostMarkerSheet(post);
           },
@@ -420,7 +420,6 @@ class _MapViewState extends State<MapView> {
                 subdomains: const ['a', 'b', 'c'],
                 userAgentPackageName: 'com.ride2gather.app',
               ),
-              // circles still drawn on the map as visual hints
               CircleLayer(circles: pinCircles),
               CircleLayer(circles: userCircles),
               RichAttributionWidget(
@@ -436,8 +435,6 @@ class _MapViewState extends State<MapView> {
               ),
             ],
           ),
-
-          // overlays (PFPS) rendered on top of the map tiles
           Positioned.fill(
             child: IgnorePointer(
               ignoring: false,
@@ -451,7 +448,7 @@ class _MapViewState extends State<MapView> {
 }
 
 extension on MapController {
-   get center => null;
+  get center => null;
 
   latLngToScreenPoint(LatLng latLng) {}
 }

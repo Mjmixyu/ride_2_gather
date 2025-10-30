@@ -1,3 +1,12 @@
+/**
+ * user_profile_view.dart
+ *
+ * File-level Dartdoc:
+ * Displays a user's public profile with a top banner image (pfp), bio, bike
+ * information, and a grid of the user's image posts. Allows the profile owner
+ * to open their settings. Data is fetched from AuthApi and posts/pins come
+ * from PostRepository. Non-destructive UI only — no business logic changes.
+ */
 import 'package:flutter/material.dart';
 import 'user_settings_view.dart';
 import '../theme/auth_theme.dart';
@@ -7,6 +16,11 @@ import '../services/post_repository.dart';
 import '../models/post.dart';
 import 'dart:io';
 
+/// Widget showing a user's profile page.
+///
+/// Shows top banner (profile image or placeholder), bio, bike display area,
+/// and a grid of the user's image posts. If the viewer is the owner, a
+/// settings button is shown to open UserSettingsPage.
 class UserProfilePage extends StatefulWidget {
   final String username;
   final String bio;
@@ -29,6 +43,7 @@ class UserProfilePage extends StatefulWidget {
   State<UserProfilePage> createState() => _UserProfilePageState();
 }
 
+/// State for UserProfilePage that manages loading user details and posts.
 class _UserProfilePageState extends State<UserProfilePage> {
   String _bio = '';
   String _bike = '';
@@ -46,7 +61,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
     _pfp = widget.pfpUrl;
     _fetchUser();
 
-    // Only include image posts for this profile
+    // initialize image posts for this profile from the repository
     _posts = PostRepository.instance.posts
         .where((p) => p.author == widget.username && p.mediaPath != null && p.mediaType == 'image')
         .toList();
@@ -60,6 +75,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
     super.dispose();
   }
 
+  /// Refresh posts list when the repository signals an update.
   void _repoUpdated() {
     if (mounted) {
       setState(() {
@@ -70,6 +86,9 @@ class _UserProfilePageState extends State<UserProfilePage> {
     }
   }
 
+  /// Fetch the latest public profile information from the API.
+  ///
+  /// Updates local bio, profile image URL, and bike info when available.
   Future<void> _fetchUser() async {
     setState(() => _loading = true);
     try {
@@ -79,7 +98,6 @@ class _UserProfilePageState extends State<UserProfilePage> {
         setState(() {
           _bio = (data['bio'] ?? '') as String;
           _pfp = (data['pfp'] ?? '') as String;
-          // myBike may be object or null
           final myBike = data['myBike'];
           if (myBike != null && myBike['name'] != null) {
             _bike = myBike['name'] as String;
@@ -88,18 +106,19 @@ class _UserProfilePageState extends State<UserProfilePage> {
           }
         });
       } else {
-        // optional: handle error
+        // error case ignored for now
       }
     } catch (e) {
-      // ignore for now
+      // ignore network errors silently for now
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  // Determine whether the current viewer is the profile owner
+  /// Whether the viewer is the profile owner.
   bool get isOwnProfile => widget.viewerUsername != null && widget.viewerUsername == widget.username;
 
+  /// Open a dialog showing post details (image and metadata).
   void _openPostDetail(Post post) {
     showDialog(
       context: context,
@@ -188,6 +207,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
     );
   }
 
+  /// Format a DateTime to a short "time ago" string for display.
   String _formatTimeAgo(DateTime t) {
     final diff = DateTime.now().difference(t);
     if (diff.inMinutes < 2) return "now";
@@ -346,7 +366,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
                             const SizedBox(height: 10),
 
-                            // Bike placeholder
+                            // Bike placeholder area showing an asset or fallback icon/text
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 16),
                               child: Center(
@@ -362,7 +382,6 @@ class _UserProfilePageState extends State<UserProfilePage> {
                                     child: Column(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
-                                        // If a known bike from enum exists, show its asset; otherwise fallback to an icon and text
                                         if (_bike.isNotEmpty)
                                           Builder(builder: (context) {
                                             final match = allBikes.where((b) => b.displayName == _bike);
@@ -458,14 +477,12 @@ class _UserProfilePageState extends State<UserProfilePage> {
               ),
             ),
 
-            // Settings button: placed last in the Stack so it's on top and receives taps.
+            // Settings button shown when viewing own profile; opens settings page and refreshes after save.
             if (isOwnProfile)
               Positioned(
-                // place slightly below the bottom edge of the top image (overlapping the content)
                 top: mediaTopHeight - 36,
                 right: 16,
                 child: Material(
-                  // Material used to get proper elevation/shadow and to ensure taps are recognized
                   color: Colors.transparent,
                   elevation: 6,
                   shape: const CircleBorder(),
@@ -490,7 +507,6 @@ class _UserProfilePageState extends State<UserProfilePage> {
                       ),
                       tooltip: "User Settings",
                       onPressed: () async {
-                        // open settings and refresh after save
                         final result = await Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => UserSettingsPage(
@@ -503,7 +519,6 @@ class _UserProfilePageState extends State<UserProfilePage> {
                           ),
                         );
                         if (result == true) {
-                          // user saved changes — refresh displayed data
                           await _fetchUser();
                         }
                       },

@@ -1,3 +1,13 @@
+/**
+ * schema.prisma
+ *
+ * File-level documentation:
+ * This Prisma schema defines the SQLite database models used by the application.
+ * It includes core models for users, bikes, locations, posts, chats, and news,
+ * as well as join tables used to represent many-to-many relationships.
+ *
+ * The schema uses a sqlite datasource and generates a JavaScript client.
+ */
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,14 +17,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-//database models for sqlite db
 model User {
   id               Int       @id @default(autoincrement())
   email            String    @unique
   username         String    @unique
   passwordHash     String
-  bio              String? // nullable
-  pfp              String? // profile image url
+  bio              String?
+  pfp              String?
   myBikeId         Int?
   myBike           Bike?     @relation("UserPrimaryBike", fields: [myBikeId], references: [id])
   bikeMods         String?
@@ -25,7 +34,6 @@ model User {
   updatedAt        DateTime  @updatedAt
   country_code     String?   @default("")
 
-  // relations
   locations     Location[]
   posts         Post[]
   sentChats     Chat[]     @relation("ChatSender")
@@ -44,7 +52,6 @@ model Bike {
   model3d  String?
   category String?
 
-  // reverse relations
   owners    UserHas[]
   primaryOf User[]    @relation("UserPrimaryBike")
 }
@@ -52,7 +59,7 @@ model Bike {
 model Location {
   id        Int       @id @default(autoincrement())
   userId    Int
-  latitude  Float? // SQLite stores as REAL
+  latitude  Float?
   longitude Float?
   pinImg    String?
   pinTxt    String?
@@ -91,7 +98,6 @@ model News {
   publishedAt DateTime?
 }
 
-// ====== relationship tables (join tables) ======
 model UserHas {
   userId Int
   bikeId Int

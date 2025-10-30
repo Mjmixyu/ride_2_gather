@@ -1,3 +1,12 @@
+/**
+ * feed_view2.dart
+ *
+ * File-level Dartdoc:
+ * Displays the main feed content including a small featured carousel of the
+ * signed-in user's recent image posts, a short list of recent text posts, and
+ * a single featured news card. Fetches remote profile pictures as needed and
+ * listens to the PostRepository for updates.
+ */
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -7,6 +16,10 @@ import '../models/post.dart';
 import '../theme/auth_theme.dart';
 import 'post_viewer.dart';
 
+/// Feed view that shows the app title, user avatar, a carousel of image posts,
+/// a scrolling list of text posts, and a featured news card.
+///
+/// The view listens to PostRepository updates and refreshes its internal lists.
 class FeedView extends StatefulWidget {
   final String username; // logged-in username
   final VoidCallback onProfileTap;
@@ -17,10 +30,11 @@ class FeedView extends StatefulWidget {
   State<FeedView> createState() => _FeedViewState();
 }
 
+/// State for FeedView handling caching, layout, and repository synchronization.
 class _FeedViewState extends State<FeedView> {
   final PageController _pageController = PageController(viewportFraction: 0.78);
 
-  // Keep a single featured news item (title + excerpt) shown in content
+  /// Simple featured news item shown in the content.
   final List<Map<String, String>> _news = [
     {
       "title": "title news",
@@ -32,7 +46,10 @@ class _FeedViewState extends State<FeedView> {
   List<Post> _userImagePosts = [];
   List<Post> _textPosts = [];
 
-  // Cache of username -> pfpUrl (null = not yet fetched, empty string = no pfp)
+  /// Cache mapping username -> pfp URL state:
+  /// - not present: not fetched yet
+  /// - null: fetching in progress
+  /// - '' (empty string): no pfp available
   final Map<String, String?> _pfpCache = {};
 
   @override
@@ -45,6 +62,9 @@ class _FeedViewState extends State<FeedView> {
     _fetchAndCachePfp(widget.username);
   }
 
+  /// Fetch a user's profile picture and cache the result.
+  ///
+  /// This function is safe to call multiple times and avoids duplicate requests.
   Future<void> _fetchAndCachePfp(String username) async {
     if (username.isEmpty) return;
     // avoid duplicate requests
@@ -66,6 +86,7 @@ class _FeedViewState extends State<FeedView> {
     if (mounted) setState(() {});
   }
 
+  /// Refresh local lists from the repository snapshot.
   void _refreshFromRepo() {
     final all = PostRepository.instance.posts;
     _posts = all;
@@ -83,6 +104,7 @@ class _FeedViewState extends State<FeedView> {
     _textPosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
+  /// Callback invoked when the PostRepository notifies listeners.
   void _onRepoUpdated() {
     if (mounted) setState(_refreshFromRepo);
   }
@@ -94,6 +116,7 @@ class _FeedViewState extends State<FeedView> {
     super.dispose();
   }
 
+  /// Calculate scaling for carousel transforms based on the current page.
   double _calculateScale(int index) {
     if (!_pageController.hasClients || _pageController.positions.isEmpty) return 1.0;
     final page = _pageController.page ?? _pageController.initialPage.toDouble();
@@ -101,6 +124,7 @@ class _FeedViewState extends State<FeedView> {
     return (1 - (diff * 0.16)).clamp(0.82, 1.0);
   }
 
+  /// Format a DateTime into a short "time ago" string used in the UI.
   String _formatTimeAgo(DateTime t) {
     final diff = DateTime.now().difference(t);
     if (diff.inMinutes < 2) return "now";
@@ -109,6 +133,7 @@ class _FeedViewState extends State<FeedView> {
     return "${diff.inDays}d";
   }
 
+  /// Helper that returns a CircleAvatar for the given username using the cached pfp.
   Widget _avatarFor(String username, {double radius = 20}) {
     // If we haven't fetched pfp yet, start fetch (fire-and-forget)
     if (!_pfpCache.containsKey(username)) {
@@ -252,6 +277,7 @@ class _FeedViewState extends State<FeedView> {
     );
   }
 
+  /// Build the list of recent text posts in a constrained height container.
   Widget _buildScrollableTextPosts() {
     if (_textPosts.isEmpty) {
       return Column(
@@ -320,6 +346,7 @@ class _FeedViewState extends State<FeedView> {
     );
   }
 
+  /// Build the image carousel for the signed-in user's image posts.
   Widget _buildUserCarousel(Size size) {
     if (_userImagePosts.isEmpty) {
       return PageView.builder(

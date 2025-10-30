@@ -1,3 +1,11 @@
+/**
+ * add_post_view2.dart
+ *
+ * File-level Dartdoc:
+ * UI for creating a new post. Provides media picking (image/video), text entry,
+ * and submission that stores the post locally and triggers an asynchronous upload.
+ * The widget updates its enabled state based on whether text or media is present.
+ */
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,6 +13,11 @@ import 'package:image_picker/image_picker.dart';
 import '../services/post_repository.dart';
 import '../theme/auth_theme.dart';
 
+/// Stateful view that allows the user to compose and submit a post.
+///
+/// Handles picking media from the gallery, showing a preview, and submitting
+/// the post through PostRepository. Keeps local state for the chosen file,
+/// media type, and text content.
 class AddPostView extends StatefulWidget {
   final String author;
   const AddPostView({super.key, required this.author});
@@ -13,6 +26,7 @@ class AddPostView extends StatefulWidget {
   State<AddPostView> createState() => _AddPostViewState();
 }
 
+/// State for AddPostView managing media, text, and submission state.
 class _AddPostViewState extends State<AddPostView> {
   File? _mediaFile;
   String _mediaType = ""; // "image", "video", or ""
@@ -36,6 +50,7 @@ class _AddPostViewState extends State<AddPostView> {
     super.dispose();
   }
 
+  /// Update whether the post button should be enabled based on content presence.
   void _updateCanPost() {
     final hasText = _textController.text.trim().isNotEmpty;
     final hasMedia = _mediaFile != null;
@@ -47,6 +62,9 @@ class _AddPostViewState extends State<AddPostView> {
     }
   }
 
+  /// Launch the image picker to pick image or video from gallery.
+  ///
+  /// @param isVideo true to pick a video, false to pick an image.
   Future<void> _pickMediaFromGallery({required bool isVideo}) async {
     XFile? pickedFile;
     try {
@@ -68,6 +86,7 @@ class _AddPostViewState extends State<AddPostView> {
     }
   }
 
+  /// Show bottom sheet allowing the user to choose image or video from gallery.
   Future<void> _showAddMediaSheet() async {
     final res = await showModalBottomSheet<int?>(
       context: context,
@@ -111,6 +130,7 @@ class _AddPostViewState extends State<AddPostView> {
     }
   }
 
+  /// Remove any selected media and update the post availability.
   void _removeMedia() {
     setState(() {
       _mediaFile = null;
@@ -119,6 +139,9 @@ class _AddPostViewState extends State<AddPostView> {
     _updateCanPost();
   }
 
+  /// Submit the post: create a local Post via repository and trigger upload.
+  ///
+  /// Ensures only one submission happens at a time and shows SnackBars on result.
   Future<void> _submitPost() async {
     if (!_canPost || _submitting) return;
 

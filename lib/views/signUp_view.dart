@@ -1,3 +1,14 @@
+/**
+ * signUp_view.dart
+ *
+ * File-level Dartdoc:
+ * Provides the SignUpView widget for user registration. This file contains a
+ * responsive sign-up form that collects username, email, password and an
+ * optional country code. It validates input, calls AuthApi.signup, and on
+ * success navigates to the HomeFeed. Uses AuthTheme for consistent styling.
+ *
+ * Note: preserves a developer reminder about restarting the server as requested.
+ */
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controller/simple_ui_controller.dart';
@@ -12,10 +23,14 @@ const List<Map<String, String>> countryList = [
   {"code": "DE", "name": "Germany"},
   {"code": "US", "name": "United States"},
   {"code": "FR", "name": "France"},
-  {"code": "GB", "name": "United Kingdom"},
-  {"code": "CN", "name": "China"},
+  {"code": "UK", "name": "United Kingdom"},
+  {"code": "IT", "name": "Italy"},
 ];
 
+/// SignUpView is a form that allows creating a new user account.
+///
+/// It validates username, email and password, and provides a country selector.
+/// On successful signup it navigates to the HomeFeed screen.
 class SignUpView extends StatefulWidget {
   const SignUpView({Key? key}) : super(key: key);
 
@@ -23,6 +38,7 @@ class SignUpView extends StatefulWidget {
   State<SignUpView> createState() => _SignUpViewState();
 }
 
+/// State for SignUpView managing controllers, loading state and selected country.
 class _SignUpViewState extends State<SignUpView> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
@@ -60,7 +76,6 @@ class _SignUpViewState extends State<SignUpView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Logo
                     Container(
                       width: 120,
                       height: 120,
@@ -88,7 +103,7 @@ class _SignUpViewState extends State<SignUpView> {
                     const Text('Create your account', style: AuthTheme.subtitleStyle),
                     const SizedBox(height: 35),
 
-                    // Rounded background container
+                    // Main rounded card containing the input fields and button
                     Container(
                       padding: const EdgeInsets.all(25),
                       decoration: BoxDecoration(
@@ -104,7 +119,7 @@ class _SignUpViewState extends State<SignUpView> {
                       ),
                       child: Column(
                         children: [
-                          // Username
+                          // Username field with validation
                           TextFormField(
                             controller: nameController,
                             style: const TextStyle(color: Colors.white),
@@ -125,7 +140,7 @@ class _SignUpViewState extends State<SignUpView> {
                           ),
                           const SizedBox(height: 18),
 
-                          // Email
+                          // Email field with basic validation
                           TextFormField(
                             controller: emailController,
                             style: const TextStyle(color: Colors.white),
@@ -142,7 +157,7 @@ class _SignUpViewState extends State<SignUpView> {
                           ),
                           const SizedBox(height: 18),
 
-                          // Password
+                          // Password field with visibility toggle and validation
                           Obx(
                                 () => TextFormField(
                               controller: passwordController,
@@ -172,7 +187,7 @@ class _SignUpViewState extends State<SignUpView> {
                           ),
                           const SizedBox(height: 18),
 
-                          // Country selector (simple dropdown)
+                          // Country selector dropdown (optional)
                           DropdownButtonFormField<String>(
                             value: _selectedCountryCode,
                             dropdownColor: const Color(0xFF1A1A3C),
@@ -195,7 +210,7 @@ class _SignUpViewState extends State<SignUpView> {
                           ),
                           const SizedBox(height: 20),
 
-                          // Sign Up Button
+                          // Sign Up button that validates and calls AuthApi.signup
                           SizedBox(
                             width: double.infinity,
                             height: 55,
@@ -262,7 +277,7 @@ class _SignUpViewState extends State<SignUpView> {
 
                     const SizedBox(height: 25),
 
-                    // Navigate to Login
+                    // Link to navigate to the login screen
                     GestureDetector(
                       onTap: () {
                         Navigator.push(

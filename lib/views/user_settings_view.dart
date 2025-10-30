@@ -1,7 +1,16 @@
-// lib/views/user_settings_page.dart
-// Now supports selecting and uploading a profile picture (pfp).
-// Uses ImagePicker to select an image, previews it locally, then uploads to server before saving other settings.
-
+/**
+ * user_settings_view.dart
+ *
+ * File-level Dartdoc:
+ * A view that allows the user to update profile settings including username,
+ * bio, chosen bike, and profile picture (PFP). This widget supports selecting
+ * an image from the gallery, previewing it locally, uploading it to the API,
+ * and saving other settings (bio and bike) via AuthApi.
+ *
+ * The view persists changes by calling AuthApi.uploadPfp (if a new image was
+ * chosen) and AuthApi.updateUserSettings. It uses AuthTheme for styling and
+ * shares the same post-repository patterns used elsewhere in the app.
+ */
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,6 +18,12 @@ import '../theme/auth_theme.dart';
 import '../models/bike.dart';
 import '../core/auth_api.dart';
 
+/// Page allowing the user to view and edit their account settings.
+///
+/// Shows a top banner with the profile image (either the picked local preview
+/// or the remote URL), fields for username and bio, a bike selector, and
+/// controls to change or remove the picked image. Save will upload the image
+/// first (if present) then update bio and bike settings.
 class UserSettingsPage extends StatefulWidget {
   final int userId;
   final String username;
@@ -29,6 +44,7 @@ class UserSettingsPage extends StatefulWidget {
   State<UserSettingsPage> createState() => _UserSettingsPageState();
 }
 
+/// State for UserSettingsPage managing form controllers, image picking, and save flow.
 class _UserSettingsPageState extends State<UserSettingsPage> {
   late final TextEditingController _usernameController;
   late final TextEditingController _bioController;
@@ -36,7 +52,7 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
   bool _saving = false;
   final _formKey = GlobalKey<FormState>();
 
-  // PFP
+  // Local picked profile picture file (preview + upload)
   File? _pickedImageFile;
   final ImagePicker _picker = ImagePicker();
 
@@ -56,6 +72,10 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
     super.dispose();
   }
 
+  /// Open the image gallery and let the user pick a profile picture.
+  ///
+  /// The picked image is stored locally in [_pickedImageFile] for preview and
+  /// later upload. Shows a SnackBar on error.
   Future<void> _pickPfp() async {
     try {
       final XFile? file = await _picker.pickImage(
@@ -74,21 +94,26 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
     }
   }
 
+  /// Remove the currently picked (unsaved) image from local state.
   void _onRemovePickedImage() {
     setState(() => _pickedImageFile = null);
   }
 
+  /// Handler to initiate changing the profile picture (opens picker).
   void _onChangePfp() {
-    // Open the picker
     _pickPfp();
   }
 
+  /// Save changes: upload picked PFP first (if any), then update bio and bike.
+  ///
+  /// Validates the form, sets the saving state, uploads the picture when
+  /// provided, calls AuthApi.updateUserSettings to persist bio and bike,
+  /// and shows SnackBars for success or errors.
   void _onSave() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
 
     try {
-      // If user picked a new image, upload it first. The server endpoint will update user.pfp.
       if (_pickedImageFile != null) {
         final up = await AuthApi.uploadPfp(userId: widget.userId, imageFile: _pickedImageFile!);
         if (up['ok'] != true) {
@@ -99,10 +124,8 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
           }
           return;
         }
-        // upload succeeded, server already set pfp; we continue to update bio/bike below
       }
 
-      // call API to update bio and bike (bike name is saved as provided)
       final result = await AuthApi.updateUserSettings(
         userId: widget.userId,
         bio: _bioController.text.trim(),
@@ -145,7 +168,7 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Column(
               children: [
-                // Top banner with pfp (preview if new image picked, otherwise remote)
+                // Top banner with PFP preview or remote image
                 SizedBox(
                   height: topBannerHeight,
                   width: double.infinity,
@@ -177,7 +200,6 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
                           ),
                         )),
                       ),
-                      // Small overlay showing that the user can change their PFP
                       Positioned(
                         left: 12,
                         bottom: 12,
@@ -224,7 +246,7 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
                 ),
                 const SizedBox(height: 18),
 
-                // Main settings card (dark rounded)
+                // Main settings form card
                 Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
@@ -246,19 +268,19 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
                         ),
                         const SizedBox(height: 12),
 
-                        // Bio with a different icon (not info)
+                        // Bio field
                         TextFormField(
                           controller: _bioController,
                           style: const TextStyle(color: Colors.white),
                           decoration: AuthTheme.textFieldDecoration(
                             hintText: 'Bio',
-                            icon: Icons.note_alt, // changed icon
+                            icon: Icons.note_alt,
                           ),
                           maxLines: 3,
                         ),
                         const SizedBox(height: 12),
 
-                        // Bike dropdown with small thumbnails (ResizeImage used by profile view too)
+                        // Bike selector dropdown showing small thumbnails
                         DropdownButtonFormField<String>(
                           value: _bikeType,
                           dropdownColor: const Color(0xFF1A1A3C),
@@ -292,6 +314,7 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
                         ),
                         const SizedBox(height: 18),
 
+                        // Save and Cancel buttons
                         SizedBox(
                           width: double.infinity,
                           height: 50,

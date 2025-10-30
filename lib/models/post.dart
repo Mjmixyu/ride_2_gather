@@ -1,3 +1,10 @@
+/**
+ * post_model.dart
+ *
+ * File-level Dartdoc:
+ * Defines the Post model used by the application to represent user posts.
+ * Includes serialization helpers, a copyWith constructor, and conversion to/from raw JSON.
+ */
 import 'dart:convert';
 
 class Post {
@@ -13,6 +20,19 @@ class Post {
   final double? lon;
   final String? locationName;
 
+  /// Post model representing a user-created post with optional media and location.
+  ///
+  /// @param id Local unique identifier for the post.
+  /// @param author Username of the post author.
+  /// @param text Text content of the post.
+  /// @param mediaType The type of media ('image', 'video', or '').
+  /// @param mediaPath Optional local path to media file.
+  /// @param createdAt Optional creation time; defaults to now if null.
+  /// @param serverId Optional server-assigned ID for the post.
+  /// @param serverCreatedAt Optional server timestamp for creation.
+  /// @param lat Optional latitude of the post location.
+  /// @param lon Optional longitude of the post location.
+  /// @param locationName Optional human-readable location name.
   Post({
     required this.id,
     required this.author,
@@ -27,6 +47,9 @@ class Post {
     this.locationName,
   }) : createdAt = createdAt ?? DateTime.now();
 
+  /// Creates a copy of this Post with the provided fields replaced.
+  ///
+  /// @return A new Post instance with the updated values.
   Post copyWith({
     String? id,
     String? serverId,
@@ -55,6 +78,9 @@ class Post {
     );
   }
 
+  /// Converts this Post instance to a JSON-compatible map.
+  ///
+  /// @return A Map<String, dynamic> suitable for JSON encoding.
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -71,6 +97,10 @@ class Post {
     };
   }
 
+  /// Constructs a Post from a JSON map produced by toJson().
+  ///
+  /// @param j The JSON map to parse.
+  /// @return A Post instance with fields parsed from the map.
   static Post fromJson(Map<String, dynamic> j) {
     return Post(
       id: j['id'] as String,
@@ -87,5 +117,8 @@ class Post {
     );
   }
 
+  /// Serializes this Post to a raw JSON string.
+  ///
+  /// @return A JSON string representing this Post.
   String toRawJson() => json.encode(toJson());
 }

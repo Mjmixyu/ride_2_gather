@@ -1,8 +1,17 @@
+/**
+ * post_viewer.dart
+ *
+ * File-level Dartdoc:
+ * Page for viewing a list of posts (typically media posts) in a full-screen
+ * pager. Shows the media (image or video placeholder) and post metadata such
+ * as author, time ago, text, and optional location. Supports swiping between posts.
+ */
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import '../models/post.dart';
 
+/// Full-screen viewer that lets the user swipe through a list of posts.
 class PostViewerPage extends StatefulWidget {
   final List<Post> posts;
   final int initialIndex;
@@ -30,6 +39,7 @@ class _PostViewerPageState extends State<PostViewerPage> {
     super.dispose();
   }
 
+  /// Build the UI for a single post in the pager.
   Widget _buildPost(Post post) {
     return Column(
       children: [
@@ -78,6 +88,7 @@ class _PostViewerPageState extends State<PostViewerPage> {
     );
   }
 
+  /// Format a DateTime into a short "time ago" string.
   String _formatTimeAgo(DateTime t) {
     final diff = DateTime.now().difference(t);
     if (diff.inMinutes < 2) return "now";

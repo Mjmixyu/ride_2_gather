@@ -1,7 +1,21 @@
+/**
+ * friends_chat_view.dart
+ *
+ * File-level Dartdoc:
+ * UI for a simple friends & chat area used in the app. Provides a list of
+ * friends, quick search, a horizontal list of recent posts from friends, and
+ * a chat screen for one-to-one messaging. This file defines lightweight
+ * Friend and FriendPost models for display and two widgets: FriendsChatView
+ * and ChatScreen. All widgets use the shared AuthTheme for consistent styling.
+ */
 import 'package:flutter/material.dart';
 import '../theme/auth_theme.dart';
 
-/// Simple friend and post models (kept from original)
+/// Lightweight model describing a friend for the friends list.
+///
+/// @param name Display name of the friend.
+/// @param online Whether the friend is recently active.
+/// @param avatarUrl Optional avatar image URL (may be empty).
 class Friend {
   final String name;
   final bool online;
@@ -9,6 +23,15 @@ class Friend {
   Friend({required this.name, required this.online, required this.avatarUrl});
 }
 
+/// Lightweight model representing a friend's post shown in the horizontal list.
+///
+/// @param imageUrl URL of the post image.
+/// @param author Author name.
+/// @param group Group or context for the post.
+/// @param text Body text of the post.
+/// @param likes Number of likes.
+/// @param comments Number of comments.
+/// @param timeAgo Short human-readable time string (e.g. "2 hrs ago").
 class FriendPost {
   final String imageUrl;
   final String author;
@@ -28,6 +51,9 @@ class FriendPost {
   });
 }
 
+/// Main friends view that shows a searchable friends list and recent friend posts.
+///
+/// The view is a full-screen widget styled with the shared AuthTheme background.
 class FriendsChatView extends StatefulWidget {
   const FriendsChatView({super.key});
 
@@ -35,6 +61,7 @@ class FriendsChatView extends StatefulWidget {
   State<FriendsChatView> createState() => _FriendsChatViewState();
 }
 
+/// State for FriendsChatView that holds sample friends, posts, and search state.
 class _FriendsChatViewState extends State<FriendsChatView> {
   List<Friend> friends = [
     Friend(name: "Helena Hills", online: true, avatarUrl: ""),
@@ -69,7 +96,6 @@ class _FriendsChatViewState extends State<FriendsChatView> {
   Widget build(BuildContext context) {
     // Use the shared auth/login gradient so the page background matches other pages
     return Scaffold(
-      // entire screen uses the app's auth gradient so it aligns visually with other pages
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -79,7 +105,7 @@ class _FriendsChatViewState extends State<FriendsChatView> {
         child: SafeArea(
           child: Column(
             children: [
-              // Header: simple title row (keeps existing icons but styled for the gradient)
+              // Header: title row with icons
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 child: Row(
@@ -108,7 +134,7 @@ class _FriendsChatViewState extends State<FriendsChatView> {
                 ),
               ),
 
-              // Main rounded card container to match the other pages' dark translucent cards
+              // Main card container with search, friends list, and recent posts
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
@@ -127,7 +153,7 @@ class _FriendsChatViewState extends State<FriendsChatView> {
                     ),
                     child: Column(
                       children: [
-                        // Search / quick actions row inside the card, styled as pill input
+                        // Search / quick actions row inside the card
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                           child: Row(
@@ -174,7 +200,7 @@ class _FriendsChatViewState extends State<FriendsChatView> {
 
                         const Divider(color: Colors.white12, height: 1),
 
-                        // Friends list
+                        // Friends list filtered by searchQuery
                         Expanded(
                           child: ListView.separated(
                             padding: const EdgeInsets.all(12),
@@ -203,7 +229,7 @@ class _FriendsChatViewState extends State<FriendsChatView> {
 
                         const Divider(color: Colors.white12, height: 1),
 
-                        // friends' latest posts horizontal (styled to match the card)
+                        // Horizontal list of friends' latest posts
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                           child: Column(
@@ -243,11 +269,15 @@ class _FriendsChatViewState extends State<FriendsChatView> {
     );
   }
 
+  /// Open the chat screen for the selected friend.
+  ///
+  /// @param friend The Friend to start a one-to-one chat with.
   void openChat(Friend friend) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatScreen(friend: friend)));
   }
 }
 
+/// Chat screen widget for one-to-one messaging with a friend.
 class ChatScreen extends StatefulWidget {
   final Friend friend;
   const ChatScreen({super.key, required this.friend});
@@ -256,6 +286,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
+/// State for ChatScreen handling messages and the input controller.
 class _ChatScreenState extends State<ChatScreen> {
   List<Map<String, dynamic>> messages = [
     {"text": "Hey, you free for a ride?", "isMe": false},
@@ -271,6 +302,7 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
+  /// Send the message currently in the input and clear the field.
   void _send() {
     if (_ctrl.text.trim().isEmpty) return;
     setState(() {
@@ -338,7 +370,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
 
-              // input area placed in a rounded card so it matches other pages
+              // Input area placed in a rounded card to match style.
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8),
                 child: Container(

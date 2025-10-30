@@ -1,3 +1,13 @@
+/**
+ * post_repository.dart
+ *
+ * File-level Dartdoc:
+ * Singleton repository that manages local posts and map pins, persists them to
+ * the application's documents directory, and coordinates uploads to the remote
+ * PostsApi when available. It also exposes a ValueNotifier for UI actions
+ * (for example requesting a tab switch) and helpers to read/write a stored
+ * country code via SharedPreferences.
+ */
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -8,6 +18,9 @@ import 'package:uuid/uuid.dart';
 import '../models/post.dart';
 import '../core/posts_api.dart';
 
+/// Simple model representing a pin placed on the map.
+///
+/// Contains coordinates, optional name and text, and a creation timestamp.
 class MapPin {
   final String id;
   final double lat;
@@ -25,6 +38,7 @@ class MapPin {
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
+  /// Convert this MapPin into a JSON-compatible map.
   Map<String, dynamic> toJson() => {
     'id': id,
     'lat': lat,
@@ -34,6 +48,7 @@ class MapPin {
     'createdAt': createdAt.toIso8601String(),
   };
 
+  /// Create a MapPin instance from a JSON map.
   static MapPin fromJson(Map<String, dynamic> j) => MapPin(
     id: j['id'] as String,
     lat: (j['lat'] as num).toDouble(),
@@ -44,6 +59,9 @@ class MapPin {
   );
 }
 
+/// Repository that stores posts and pins locally, persists them, and notifies listeners.
+///
+/// Use PostRepository.instance to access the singleton.
 class PostRepository extends ChangeNotifier {
   static final PostRepository instance = PostRepository._internal();
   factory PostRepository() => instance;
@@ -56,19 +74,20 @@ class PostRepository extends ChangeNotifier {
   final List<MapPin> _pins = [];
   bool _initialized = false;
 
-  // Notifier used to request UI actions from other widgets (e.g. switch tab).
+  /// Notifier other widgets can use to request UI actions (for example switching tabs).
   final ValueNotifier<int?> tabRequest = ValueNotifier<int?>(null);
 
   List<Post> get posts => List.unmodifiable(_posts);
   List<MapPin> get pins => List.unmodifiable(_pins);
 
+  /// Initialize repository: set application directory, load saved posts and pins,
+  /// and ensure SharedPreferences is available. Safe to call multiple times.
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
 
     _appDir = await getApplicationDocumentsDirectory();
 
-    // load posts
     final postsFile = File(p.join(_appDir.path, 'posts.json'));
     if (await postsFile.exists()) {
       try {
@@ -78,12 +97,10 @@ class PostRepository extends ChangeNotifier {
           _posts.add(Post.fromJson(item as Map<String, dynamic>));
         }
       } catch (e) {
-        // ignore parse errors for now
         if (kDebugMode) print('Failed reading posts.json: $e');
       }
     }
 
-    // load pins
     final pinsFile = File(p.join(_appDir.path, 'pins.json'));
     if (await pinsFile.exists()) {
       try {
@@ -97,26 +114,32 @@ class PostRepository extends ChangeNotifier {
       }
     }
 
-    // ensure SharedPreferences is available (used for country_code)
     await SharedPreferences.getInstance();
 
     notifyListeners();
   }
 
+  /// Persist the in-memory posts list to posts.json.
   Future<void> _savePosts() async {
     final postsFile = File(p.join(_appDir.path, 'posts.json'));
     final arr = _posts.map((p) => p.toJson()).toList();
     await postsFile.writeAsString(json.encode(arr));
   }
 
+  /// Persist the in-memory pins list to pins.json.
   Future<void> _savePins() async {
     final pinsFile = File(p.join(_appDir.path, 'pins.json'));
     final arr = _pins.map((p) => p.toJson()).toList();
     await pinsFile.writeAsString(json.encode(arr));
   }
 
-  // add a post locally and attempt to upload to server (if PostsApi._base is reachable).
-  // returns the created local Post.
+  /// Add a post locally and attempt to upload it to the server asynchronously.
+  ///
+  /// The mediaFile (if provided) is copied into the app directory to maintain
+  /// a stable local reference. The function inserts the new post at the front
+  /// of the local list, saves posts.json, notifies listeners, and triggers an
+  /// asynchronous upload via PostsApi. If the server returns an id or createdAt
+  /// timestamp, the local post is updated accordingly.
   Future<Post> addPost({
     required String author,
     required String text,
@@ -152,7 +175,6 @@ class PostRepository extends ChangeNotifier {
     await _savePosts();
     notifyListeners();
 
-    // Try upload to server asynchronously — don't block user if server is down.
     try {
       final mediaForUpload = mediaFile != null ? File(savedPath ?? mediaFile.path) : null;
       final resp = await PostsApi.uploadPost(
@@ -171,7 +193,6 @@ class PostRepository extends ChangeNotifier {
         }
       }
 
-      // If server returned an id / createdAt, store them locally so profile/feed can use server info.
       if (resp['ok'] == true && resp['data'] != null) {
         final data = resp['data'] as Map<String, dynamic>;
         final serverId = data['id']?.toString();
@@ -183,7 +204,6 @@ class PostRepository extends ChangeNotifier {
         }
 
         if (serverId != null) {
-          // find local post by matching unique fields (here we use the generated local id)
           final idx = _posts.indexWhere((p) => p.id == post.id);
           if (idx != -1) {
             final updated = _posts[idx].copyWith(serverId: serverId, serverCreatedAt: serverCreated);
@@ -201,6 +221,7 @@ class PostRepository extends ChangeNotifier {
     return post;
   }
 
+  /// Create and persist a new MapPin.
   Future<void> addPin({
     required double lat,
     required double lon,
@@ -220,6 +241,7 @@ class PostRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Clear all stored posts and pins from memory and disk.
   Future<void> clearAll() async {
     _posts.clear();
     _pins.clear();
@@ -228,11 +250,13 @@ class PostRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Retrieve the stored country code from SharedPreferences, if any.
   Future<String?> getStoredCountryCode() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('country_code');
   }
 
+  /// Store the country code string in SharedPreferences.
   Future<void> setStoredCountryCode(String code) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('country_code', code);

@@ -1,3 +1,11 @@
+/**
+ * home_feed.dart
+ *
+ * File-level Dartdoc:
+ * Defines the HomeFeed widget which provides the main bottom-tab navigation
+ * for the application. It constructs the page list and handles tab switching,
+ * including external tab requests forwarded via PostRepository.
+ */
 import 'package:flutter/material.dart';
 import '../views/add_post_view.dart';
 import '../views/feed_view.dart';
@@ -6,6 +14,10 @@ import '../views/userProfile_view.dart';
 import '../views/map_view.dart';
 import '../services/post_repository.dart';
 
+/// A stateful widget that displays the main app pages with a BottomNavigationBar.
+///
+/// The widget requires the currently signed-in username and the userId so
+/// that pages which need viewer context can be initialized.
 class HomeFeed extends StatefulWidget {
   final String username;
   final int userId;
@@ -16,6 +28,7 @@ class HomeFeed extends StatefulWidget {
   State<HomeFeed> createState() => _HomeFeedState();
 }
 
+/// State for HomeFeed that manages the selected tab and page list.
 class _HomeFeedState extends State<HomeFeed> {
   int _selectedIndex = 0;
 
@@ -28,9 +41,8 @@ class _HomeFeedState extends State<HomeFeed> {
     _pages = [
       FeedView(onProfileTap: _onProfileNav, username: widget.username),
       const MapView(),
-      AddPostView(author: widget.username), // pass actual username so posts have the right author
+      AddPostView(author: widget.username),
       const FriendsChatView(),
-      // Pass viewerUsername so UserProfilePage can know whether viewer == profile owner
       UserProfilePage(
         username: widget.username,
         bio: '',
@@ -41,14 +53,14 @@ class _HomeFeedState extends State<HomeFeed> {
       ),
     ];
 
-    // Listen for tab requests from PostRepository (e.g. AddPostView requests switch to feed)
+    /// Sets up a listener for external tab requests from PostRepository.
+    /// When a request is present, updates the selected index and clears the request.
     _tabListener = () {
       final req = PostRepository.instance.tabRequest.value;
       if (req != null) {
         setState(() {
           _selectedIndex = req;
         });
-        // reset request
         PostRepository.instance.tabRequest.value = null;
       }
     };
@@ -61,12 +73,18 @@ class _HomeFeedState extends State<HomeFeed> {
     super.dispose();
   }
 
+  /// Switches view to the profile tab.
+  ///
+  /// This helper sets the selected tab index to the profile page index.
   void _onProfileNav() {
     setState(() {
-      _selectedIndex = 4; // Profile tab index
+      _selectedIndex = 4;
     });
   }
 
+  /// Handler for tap events on the bottom navigation bar.
+  ///
+  /// @param index The index of the tab that was tapped.
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;

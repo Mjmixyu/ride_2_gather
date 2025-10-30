@@ -1,12 +1,29 @@
+/**
+ * posts_api.dart
+ *
+ * File-level Dartdoc:
+ * Provides helper functions for uploading posts that may include optional
+ * media files. The PostsApi class contains a single uploadPost static method
+ * that constructs a multipart request and returns a structured response map.
+ */
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
 import 'package:http_parser/http_parser.dart';
 
+/// A collection of static methods for interacting with post-related server endpoints.
 class PostsApi {
   static const String _base = 'http://10.0.2.2:3000';
 
+  /// Uploads a post to the server including optional media (image or video).
+  ///
+  /// @param author The username of the post author.
+  /// @param text The textual content of the post.
+  /// @param mediaFile Optional file to upload as media for the post.
+  /// @param mediaType One of 'image', 'video', or an empty string when no media is present.
+  /// @param token Optional bearer token for authorization.
+  /// @return A map with 'ok' true and 'data' on success, or 'ok' false and 'error' message on failure.
   static Future<Map<String, dynamic>> uploadPost({
     required String author,
     required String text,
@@ -14,7 +31,7 @@ class PostsApi {
     required String mediaType, // 'image' | 'video' | ''
     String? token,
   }) async {
-    final uri = Uri.parse('$_base/post'); // change to /posts if your server expects that
+    final uri = Uri.parse('$_base/post');
     final request = http.MultipartRequest('POST', uri);
 
     request.fields['author'] = author;

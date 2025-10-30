@@ -1,11 +1,30 @@
+/**
+ * world_news_bar.dart
+ *
+ * File-level Dartdoc:
+ * A small horizontal ticker widget that displays brief world news headlines.
+ * It accepts a list of headline strings and an optional tap callback for items.
+ */
 import 'package:flutter/material.dart';
 
+/**
+ * Displays a horizontal list of short news items with a leading world icon.
+ *
+ * @param newsItems List of strings shown as headlines.
+ * @param onTapHeadline Optional callback invoked with the tapped headline.
+ */
 class WorldNewsBar extends StatelessWidget {
   final List<String> newsItems;
   final void Function(String)? onTapHeadline;
 
   const WorldNewsBar({Key? key, required this.newsItems, this.onTapHeadline}) : super(key: key);
 
+  /**
+   * Build the horizontal news bar UI using a ListView to allow scrolling.
+   *
+   * @param context BuildContext used to construct widgets.
+   * @return Widget The rendered news bar.
+   */
   @override
   Widget build(BuildContext context) {
     return Container(
