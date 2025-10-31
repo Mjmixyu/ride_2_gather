@@ -48,6 +48,14 @@ class _SignUpViewState extends State<SignUpView> {
 
   String _selectedCountryCode = "";
 
+  // Practical, user-facing email regexp:
+  // - requires something@something.tld
+  // - disallows spaces and ensures at least 2 chars for final TLD part
+  // This is a pragmatic compromise — server-side validation should also be used.
+  final RegExp _emailRegExp = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$', caseSensitive: false);
+
+  /// Dispose controllers when the widget is removed from the tree to free
+  /// resources and avoid memory leaks.
   @override
   void dispose() {
     nameController.dispose();
@@ -56,6 +64,14 @@ class _SignUpViewState extends State<SignUpView> {
     super.dispose();
   }
 
+  /// Builds the SignUpView UI.
+  ///
+  /// The form includes:
+  /// - Username TextFormField with length validation.
+  /// - Email TextFormField with improved email validation (client-side).
+  /// - Password TextFormField with visibility toggle and length validation.
+  /// - Optional country selector.
+  /// - Sign Up button that calls AuthApi.signup and handles navigation/errors.
   @override
   Widget build(BuildContext context) {
     final SimpleUIController simpleUIController = Get.put(SimpleUIController());
@@ -140,17 +156,23 @@ class _SignUpViewState extends State<SignUpView> {
                           ),
                           const SizedBox(height: 18),
 
-                          // Email field with basic validation
+                          // Email field with improved validation
                           TextFormField(
                             controller: emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            autofillHints: const [AutofillHints.email],
                             style: const TextStyle(color: Colors.white),
                             decoration: AuthTheme.textFieldDecoration(
                               hintText: 'Email',
                               icon: Icons.email_outlined,
                             ),
                             validator: (value) {
-                              if (value == null || value.isEmpty) {
+                              final v = (value ?? '').trim();
+                              if (v.isEmpty) {
                                 return 'Please enter email';
+                              }
+                              if (!_emailRegExp.hasMatch(v)) {
+                                return 'Please enter a valid email';
                               }
                               return null;
                             },
@@ -279,6 +301,7 @@ class _SignUpViewState extends State<SignUpView> {
 
                     // Link to navigate to the login screen
                     GestureDetector(
+                      /// Navigates to LoginView and resets the form/controllers.
                       onTap: () {
                         Navigator.push(
                           context,
