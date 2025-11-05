@@ -1,20 +1,18 @@
 /**
  * friends_chat_view.dart
  *
- * Loads friends from the server (AuthApi.listUsers) and shows the latest text
- * posts from PostRepository. Chat screen remains mocked/local.
- *
- * Fixes applied:
- * - Removed unused import of shared_preferences that was causing a lint warning.
- * - Fixed the height calculation for the Latest text posts SizedBox so it produces
- *   a double (avoids "The argument type 'num' can't be assigned to the parameter
- *   type 'double?'" error).
- * - Kept behavior otherwise unchanged.
+ * Friends list + persisted DMs:
+ * - Loads users from server (AuthApi.listUsers).
+ * - Loads unread counts (ChatsApi.unreadCounts) to show small badge dots.
+ * - Chat screen merges mocked starter messages with server thread.
+ * - Sending a message persists via ChatsApi.sendMessage and updates UI.
+ * - Opening a chat marks messages from that friend as read.
  */
 
 import 'package:flutter/material.dart';
 import '../theme/auth_theme.dart';
 import '../core/auth_api.dart';
+import '../core/chats_api.dart';
 import '../services/post_repository.dart';
 import '../models/post.dart';
 
@@ -27,7 +25,10 @@ class Friend {
 }
 
 class FriendsChatView extends StatefulWidget {
-  const FriendsChatView({super.key});
+  final int currentUserId;
+  final String currentUsername;
+
+  const FriendsChatView({super.key, required this.currentUserId, required this.currentUsername});
 
   @override
   State<FriendsChatView> createState() => _FriendsChatViewState();
@@ -38,6 +39,10 @@ class _FriendsChatViewState extends State<FriendsChatView> {
   String _searchQuery = "";
   bool _loadingFriends = true;
 
+  // unread badge data: friendId -> count
+  Map<int, int> _unread = {};
+
+  // latest text posts (unchanged)
   List<Post> _latestTextPosts = [];
   final Map<String, String?> _pfpCache = {};
 
@@ -70,8 +75,10 @@ class _FriendsChatViewState extends State<FriendsChatView> {
           _pfpCache[username] = pfp.isNotEmpty ? pfp : '';
           return Friend(name: username, online: online, avatarUrl: pfp, id: id);
         }).toList();
+
+        // fetch unread counts for current user
+        _unread = await ChatsApi.unreadCounts(userId: widget.currentUserId);
       } else {
-        // fallback small static list if server call fails
         _friends = [
           Friend(name: "alice", online: true, avatarUrl: "", id: null),
           Friend(name: "bob", online: false, avatarUrl: "", id: null),
@@ -97,8 +104,33 @@ class _FriendsChatViewState extends State<FriendsChatView> {
     if (mounted) setState(() {});
   }
 
-  void _openChat(Friend friend) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatScreen(friend: friend)));
+  void _openChat(Friend friend) async {
+    if (friend.id != null) {
+      // mark read before opening
+      await ChatsApi.markRead(userId: widget.currentUserId, fromUserId: friend.id!);
+      // update unread map locally
+      setState(() {
+        _unread.remove(friend.id);
+      });
+    }
+    // go to chat
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          friend: friend,
+          currentUserId: widget.currentUserId,
+          currentUsername: widget.currentUsername,
+          onNewMessageSent: () async {
+            // refresh unread after we come back (maybe other chats changed)
+            _unread = await ChatsApi.unreadCounts(userId: widget.currentUserId);
+            if (mounted) setState(() {});
+          },
+        ),
+      ),
+    );
+    // refresh unread again after closing
+    _unread = await ChatsApi.unreadCounts(userId: widget.currentUserId);
+    if (mounted) setState(() {});
   }
 
   Widget _avatarFor(String username, {double radius = 20}) {
@@ -108,11 +140,10 @@ class _FriendsChatViewState extends State<FriendsChatView> {
         if (res['ok'] == true && res['data'] != null) {
           final pfp = (res['data']['pfp'] ?? '').toString();
           _pfpCache[username] = pfp.isNotEmpty ? pfp : '';
-          if (mounted) setState(() {});
         } else {
           _pfpCache[username] = '';
-          if (mounted) setState(() {});
         }
+        if (mounted) setState(() {});
       }).catchError((_) {
         _pfpCache[username] = '';
         if (mounted) setState(() {});
@@ -135,12 +166,12 @@ class _FriendsChatViewState extends State<FriendsChatView> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _friends.where((f) => f.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+    final filtered = _friends
+        .where((f) => f.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+        .toList();
 
-    // compute a double height safely (avoid num -> double error)
-    final double postsBoxHeight = _latestTextPosts.isEmpty
-        ? 80.0
-        : ((_latestTextPosts.length * 72.0).clamp(80.0, 300.0)).toDouble();
+    final double postsBoxHeight =
+    _latestTextPosts.isEmpty ? 80.0 : ((_latestTextPosts.length * 72.0).clamp(80.0, 300.0)).toDouble();
 
     return Scaffold(
       body: Container(
@@ -222,19 +253,42 @@ class _FriendsChatViewState extends State<FriendsChatView> {
                             separatorBuilder: (_, __) => const Divider(color: Colors.white12),
                             itemBuilder: (_, i) {
                               final friend = filtered[i];
+
+                              // badge count (if friend has an id)
+                              final unreadCount = (friend.id != null) ? (_unread[friend.id!] ?? 0) : 0;
+
                               return ListTile(
-                                leading: CircleAvatar(
-                                  radius: 25,
-                                  backgroundColor: Colors.grey.shade800,
-                                  backgroundImage: friend.avatarUrl.isNotEmpty ? NetworkImage(friend.avatarUrl) : null,
-                                  child: friend.avatarUrl.isEmpty ? const Icon(Icons.person, size: 28, color: Colors.white70) : null,
+                                leading: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 25,
+                                      backgroundColor: Colors.grey.shade800,
+                                      backgroundImage: friend.avatarUrl.isNotEmpty ? NetworkImage(friend.avatarUrl) : null,
+                                      child: friend.avatarUrl.isEmpty
+                                          ? const Icon(Icons.person, size: 28, color: Colors.white70)
+                                          : null,
+                                    ),
+                                    if (unreadCount > 0)
+                                      Positioned(
+                                        right: -2,
+                                        top: -2,
+                                        child: Container(
+                                          width: 12,
+                                          height: 12,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.redAccent,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
                                 ),
-                                title: Text(friend.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                                subtitle: Text(friend.online ? "Active recently" : "Offline", style: const TextStyle(color: Colors.white70)),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.chat_bubble_outline, color: Colors.white70),
-                                  onPressed: () => _openChat(friend),
-                                ),
+                                title: Text(friend.name,
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                                subtitle: Text(friend.online ? "Active recently" : "Offline",
+                                    style: const TextStyle(color: Colors.white70)),
+                                trailing: const Icon(Icons.chat_bubble_outline, color: Colors.white70),
                                 onTap: () => _openChat(friend),
                               );
                             },
@@ -256,7 +310,8 @@ class _FriendsChatViewState extends State<FriendsChatView> {
                                 child: _latestTextPosts.isEmpty
                                     ? Container(
                                   padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.02), borderRadius: BorderRadius.circular(10)),
+                                  decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.02), borderRadius: BorderRadius.circular(10)),
                                   child: const Text('No recent text posts', style: TextStyle(color: Colors.white70)),
                                 )
                                     : ListView.separated(
@@ -269,15 +324,23 @@ class _FriendsChatViewState extends State<FriendsChatView> {
                                     return ListTile(
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 4.0),
                                       leading: _avatarFor(p.author, radius: 20),
-                                      title: Text(p.text, style: const TextStyle(color: Colors.white), maxLines: 2, overflow: TextOverflow.ellipsis),
-                                      subtitle: Text('${p.author} • ${_formatTimeAgo(p.createdAt)}', style: const TextStyle(color: Colors.white70)),
+                                      title: Text(p.text,
+                                          style: const TextStyle(color: Colors.white),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis),
+                                      subtitle: Text('${p.author} • ${_formatTimeAgo(p.createdAt)}',
+                                          style: const TextStyle(color: Colors.white70)),
                                       onTap: () {
                                         showDialog(
                                           context: context,
                                           builder: (_) => AlertDialog(
                                             title: Text(p.author),
                                             content: Text(p.text),
-                                            actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close'))],
+                                            actions: [
+                                              TextButton(
+                                                  onPressed: () => Navigator.of(context).pop(),
+                                                  child: const Text('Close')),
+                                            ],
                                           ),
                                         );
                                       },
@@ -301,24 +364,43 @@ class _FriendsChatViewState extends State<FriendsChatView> {
   }
 }
 
-/// Chat screen widget (mocked/local messages)
 class ChatScreen extends StatefulWidget {
   final Friend friend;
-  const ChatScreen({super.key, required this.friend});
+  final int currentUserId;
+  final String currentUsername;
+  final VoidCallback? onNewMessageSent;
+
+  const ChatScreen({
+    super.key,
+    required this.friend,
+    required this.currentUserId,
+    required this.currentUsername,
+    this.onNewMessageSent,
+  });
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  List<Map<String, dynamic>> messages = [
+  // Mocked starter messages (kept) – will be merged with server thread
+  final List<Map<String, dynamic>> _localMock = [
     {"text": "Hey, you free for a ride?", "isMe": false},
     {"text": "Yes! When?", "isMe": true},
     {"text": "This Sunday morning?", "isMe": false},
   ];
 
+  final List<Map<String, dynamic>> _thread = []; // merged view
+  bool _loading = true;
+
   final TextEditingController _ctrl = TextEditingController();
   final ScrollController _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadThread();
+  }
 
   @override
   void dispose() {
@@ -327,15 +409,70 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  void _send() {
+  Future<void> _loadThread() async {
+    setState(() => _loading = true);
+
+    // Start with mocked local
+    _thread.clear();
+    _thread.addAll(_localMock);
+
+    // Merge server thread if friend has an id
+    if (widget.friend.id != null) {
+      final res = await ChatsApi.getThread(userA: widget.currentUserId, userB: widget.friend.id!);
+      if (res['ok'] == true) {
+        final List serverMessages = res['data'] as List;
+        for (final m in serverMessages) {
+          final senderId = (m['senderId'] as num).toInt();
+          final text = (m['messageTxt'] ?? '').toString();
+          _thread.add({
+            'text': text,
+            'isMe': senderId == widget.currentUserId,
+          });
+        }
+        // Mark read
+        await ChatsApi.markRead(userId: widget.currentUserId, fromUserId: widget.friend.id!);
+      }
+    }
+
+    setState(() => _loading = false);
+
+    // scroll to bottom
+    await Future.delayed(const Duration(milliseconds: 50));
+    if (_scroll.hasClients) {
+      _scroll.jumpTo(_scroll.position.maxScrollExtent);
+    }
+  }
+
+  Future<void> _send() async {
     if (_ctrl.text.trim().isEmpty) return;
+    final text = _ctrl.text.trim();
+
+    // Optimistic UI
     setState(() {
-      messages.add({"text": _ctrl.text.trim(), "isMe": true});
+      _thread.add({"text": text, "isMe": true});
       _ctrl.clear();
     });
+    _scrollToEnd();
+
+    // Persist if friend has id (real user)
+    if (widget.friend.id != null) {
+      await ChatsApi.sendMessage(
+        senderId: widget.currentUserId,
+        receiverId: widget.friend.id!,
+        text: text,
+      );
+      widget.onNewMessageSent?.call();
+    }
+  }
+
+  void _scrollToEnd() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
-        _scroll.animateTo(_scroll.position.maxScrollExtent + 100, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+        _scroll.animateTo(
+          _scroll.position.maxScrollExtent + 120,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+        );
       }
     });
   }
@@ -364,29 +501,32 @@ class _ChatScreenState extends State<ChatScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              Expanded(
-                child: ListView.builder(
-                  controller: _scroll,
-                  padding: const EdgeInsets.all(16.0),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final msg = messages[index];
-                    final isMe = msg["isMe"] as bool;
-                    return Align(
-                      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: isMe ? Colors.blueAccent : Colors.white.withOpacity(0.06),
-                          borderRadius: BorderRadius.circular(12),
+              if (_loading)
+                const Expanded(child: Center(child: CircularProgressIndicator()))
+              else
+                Expanded(
+                  child: ListView.builder(
+                    controller: _scroll,
+                    padding: const EdgeInsets.all(16.0),
+                    itemCount: _thread.length,
+                    itemBuilder: (context, index) {
+                      final msg = _thread[index];
+                      final isMe = msg["isMe"] as bool;
+                      return Align(
+                        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isMe ? Colors.blueAccent : Colors.white.withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(msg["text"], style: const TextStyle(color: Colors.white)),
                         ),
-                        child: Text(msg["text"], style: const TextStyle(color: Colors.white)),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
-              ),
 
               // Input
               Padding(
@@ -401,14 +541,23 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: TextField(
                           controller: _ctrl,
                           style: const TextStyle(color: Colors.white),
-                          decoration: const InputDecoration(hintText: 'Write a message...', hintStyle: TextStyle(color: Colors.white70), border: InputBorder.none),
+                          decoration: const InputDecoration(
+                            hintText: 'Write a message...',
+                            hintStyle: TextStyle(color: Colors.white70),
+                            border: InputBorder.none,
+                          ),
                           onSubmitted: (_) => _send(),
                         ),
                       ),
                       IconButton(icon: const Icon(Icons.emoji_emotions, color: Colors.white70), onPressed: () {}),
                       GestureDetector(
                         onTap: _send,
-                        child: Container(margin: const EdgeInsets.only(left: 6), padding: const EdgeInsets.all(10), decoration: const BoxDecoration(color: Colors.blueAccent, shape: BoxShape.circle), child: const Icon(Icons.send, color: Colors.white, size: 18)),
+                        child: Container(
+                          margin: const EdgeInsets.only(left: 6),
+                          padding: const EdgeInsets.all(10),
+                          decoration: const BoxDecoration(color: Colors.blueAccent, shape: BoxShape.circle),
+                          child: const Icon(Icons.send, color: Colors.white, size: 18),
+                        ),
                       )
                     ],
                   ),

@@ -320,6 +320,150 @@ app.get('/users', async (_req, res) => {
     }
 });
 
+// ------------------------------
+// Chats (DMs) – persisted in SQLite via Prisma
+// ------------------------------
+
+/**
+ * Get chat history between two users (by id).
+ * @route GET /chats/:a/:b
+ */
+app.get('/chats/:a/:b', async (req, res) => {
+    try {
+        const a = parseInt(req.params.a, 10);
+        const b = parseInt(req.params.b, 10);
+        if (isNaN(a) || isNaN(b)) return res.status(400).json({ error: 'invalid user ids' });
+
+        // ensure both users exist (optional)
+        const [ua, ub] = await Promise.all([
+            prisma.user.findUnique({ where: { id: a }, select: { id: true } }),
+            prisma.user.findUnique({ where: { id: b }, select: { id: true } }),
+        ]);
+        if (!ua || !ub) return res.status(404).json({ error: 'user not found' });
+
+        const items = await prisma.chat.findMany({
+            where: {
+                OR: [
+                    { senderId: a, receiverId: b },
+                    { senderId: b, receiverId: a },
+                ],
+            },
+            orderBy: { sentAt: 'asc' },
+            select: {
+                id: true,
+                senderId: true,
+                receiverId: true,
+                messageTxt: true,
+                sentAt: true,
+                readAt: true,
+                attachments: true,
+            },
+        });
+
+        return res.json({ ok: true, data: items });
+    } catch (e) {
+        console.error('GET_CHATS_ERROR:', e);
+        return res.status(500).json({ error: e?.message || 'server error' });
+    }
+});
+
+/**
+ * Send a chat message (persist).
+ * JSON body: { senderId, receiverId, messageTxt }
+ * @route POST /chats
+ */
+app.post('/chats', async (req, res) => {
+    try {
+        const { senderId, receiverId, messageTxt } = req.body || {};
+        const sId = parseInt(senderId, 10);
+        const rId = parseInt(receiverId, 10);
+        if (isNaN(sId) || isNaN(rId)) {
+            return res.status(422).json({ error: 'senderId and receiverId are required' });
+        }
+        if (!messageTxt || String(messageTxt).trim().length === 0) {
+            return res.status(422).json({ error: 'messageTxt is required' });
+        }
+
+        // ensure both users exist (optional)
+        const [s, r] = await Promise.all([
+            prisma.user.findUnique({ where: { id: sId }, select: { id: true } }),
+            prisma.user.findUnique({ where: { id: rId }, select: { id: true } }),
+        ]);
+        if (!s || !r) return res.status(404).json({ error: 'user not found' });
+
+        const created = await prisma.chat.create({
+            data: {
+                senderId: sId,
+                receiverId: rId,
+                messageTxt: String(messageTxt),
+            },
+            select: {
+                id: true,
+                senderId: true,
+                receiverId: true,
+                messageTxt: true,
+                sentAt: true,
+            },
+        });
+
+        return res.status(201).json({ ok: true, data: created });
+    } catch (e) {
+        console.error('POST_CHATS_ERROR:', e);
+        return res.status(500).json({ error: e?.message || 'server error' });
+    }
+});
+
+/**
+ * Mark messages from `fromUserId` to `userId` as read (sets readAt=now).
+ * JSON body: { userId, fromUserId }
+ * @route POST /chats/read
+ */
+app.post('/chats/read', async (req, res) => {
+    try {
+        const { userId, fromUserId } = req.body || {};
+        const uid = parseInt(userId, 10);
+        const fid = parseInt(fromUserId, 10);
+        if (isNaN(uid) || isNaN(fid)) return res.status(422).json({ error: 'userId and fromUserId required' });
+
+        const updated = await prisma.chat.updateMany({
+            where: { receiverId: uid, senderId: fid, readAt: null },
+            data: { readAt: new Date() },
+        });
+
+        return res.json({ ok: true, updated: updated.count });
+    } catch (e) {
+        console.error('POST_CHATS_READ_ERROR:', e);
+        return res.status(500).json({ error: e?.message || 'server error' });
+    }
+});
+
+/**
+ * Get unread counts for a user, grouped by sender.
+ * @route GET /chats/unread/:userId
+ */
+app.get('/chats/unread/:userId', async (req, res) => {
+    try {
+        const uid = parseInt(req.params.userId, 10);
+        if (isNaN(uid)) return res.status(400).json({ error: 'invalid user id' });
+
+        const rows = await prisma.chat.findMany({
+            where: { receiverId: uid, readAt: null },
+            select: { senderId: true },
+        });
+
+        const counts = {};
+        for (const r of rows) {
+            counts[r.senderId] = (counts[r.senderId] || 0) + 1;
+        }
+
+        return res.json({ ok: true, data: counts }); // { [senderId]: count }
+    } catch (e) {
+        console.error('GET_CHATS_UNREAD_ERROR:', e);
+        return res.status(500).json({ error: e?.message || 'server error' });
+    }
+});
+
+
 /**
  * Log unhandled promise rejections to avoid silent failures.
  *

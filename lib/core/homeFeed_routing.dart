@@ -44,7 +44,10 @@ class _HomeFeedState extends State<HomeFeed> {
       FeedView(username: widget.username),
       const MapView(),
       AddPostView(author: widget.username),
-      const FriendsChatView(),
+      FriendsChatView(
+        currentUserId: widget.userId,
+        currentUsername: widget.username,
+      ),
       UserProfilePage(
         username: widget.username,
         bio: '',
