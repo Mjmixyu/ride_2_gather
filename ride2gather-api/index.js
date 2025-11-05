@@ -306,6 +306,20 @@ app.post('/user/:id/pfp', upload.single('pfp'), async (req, res) => {
     }
 });
 
+//get users in friends list
+app.get('/users', async (_req, res) => {
+    try {
+        const users = await prisma.user.findMany({
+            select: { id: true, username: true, pfp: true, lastOnline: true },
+            orderBy: { username: 'asc' },
+        });
+        return res.json({ ok: true, data: users });
+    } catch (e) {
+        console.error('GET_USERS_ERROR:', e);
+        return res.status(500).json({ error: e?.message || 'server error' });
+    }
+});
+
 /**
  * Log unhandled promise rejections to avoid silent failures.
  *

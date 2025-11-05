@@ -273,6 +273,21 @@ class AuthApi {
     }
   }
 
+  /// List public users for the Friends screen.
+  static Future<Map<String, dynamic>> listUsers({http.Client? client}) async {
+    final c = client ?? http.Client();
+    try {
+      final res = await c.get(Uri.parse('$_base/users'));
+      final body = jsonDecode(res.body.isEmpty ? '{}' : res.body);
+      if (res.statusCode == 200) {
+        return {'ok': true, 'data': body['data'] ?? []};
+      }
+      return {'ok': false, 'error': body['error'] ?? 'Failed to load users'};
+    } catch (e) {
+      return {'ok': false, 'error': 'Network error: $e'};
+    }
+  }
+
   static String _randomDigits(int length) {
     final rnd = Random.secure();
     final buffer = StringBuffer();

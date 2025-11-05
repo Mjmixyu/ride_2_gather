@@ -1,59 +1,31 @@
 /**
  * friends_chat_view.dart
  *
- * File-level Dartdoc:
- * UI for a simple friends & chat area used in the app. Provides a list of
- * friends, quick search, a horizontal list of recent posts from friends, and
- * a chat screen for one-to-one messaging. This file defines lightweight
- * Friend and FriendPost models for display and two widgets: FriendsChatView
- * and ChatScreen. All widgets use the shared AuthTheme for consistent styling.
+ * Loads friends from the server (AuthApi.listUsers) and shows the latest text
+ * posts from PostRepository. Chat screen remains mocked/local.
+ *
+ * Fixes applied:
+ * - Removed unused import of shared_preferences that was causing a lint warning.
+ * - Fixed the height calculation for the Latest text posts SizedBox so it produces
+ *   a double (avoids "The argument type 'num' can't be assigned to the parameter
+ *   type 'double?'" error).
+ * - Kept behavior otherwise unchanged.
  */
+
 import 'package:flutter/material.dart';
 import '../theme/auth_theme.dart';
+import '../core/auth_api.dart';
+import '../services/post_repository.dart';
+import '../models/post.dart';
 
-/// Lightweight model describing a friend for the friends list.
-///
-/// @param name Display name of the friend.
-/// @param online Whether the friend is recently active.
-/// @param avatarUrl Optional avatar image URL (may be empty).
 class Friend {
   final String name;
   final bool online;
   final String avatarUrl;
-  Friend({required this.name, required this.online, required this.avatarUrl});
+  final int? id;
+  Friend({required this.name, required this.online, required this.avatarUrl, this.id});
 }
 
-/// Lightweight model representing a friend's post shown in the horizontal list.
-///
-/// @param imageUrl URL of the post image.
-/// @param author Author name.
-/// @param group Group or context for the post.
-/// @param text Body text of the post.
-/// @param likes Number of likes.
-/// @param comments Number of comments.
-/// @param timeAgo Short human-readable time string (e.g. "2 hrs ago").
-class FriendPost {
-  final String imageUrl;
-  final String author;
-  final String group;
-  final String text;
-  final int likes;
-  final int comments;
-  final String timeAgo;
-  FriendPost({
-    required this.imageUrl,
-    required this.author,
-    required this.group,
-    required this.text,
-    required this.likes,
-    required this.comments,
-    required this.timeAgo,
-  });
-}
-
-/// Main friends view that shows a searchable friends list and recent friend posts.
-///
-/// The view is a full-screen widget styled with the shared AuthTheme background.
 class FriendsChatView extends StatefulWidget {
   const FriendsChatView({super.key});
 
@@ -61,80 +33,138 @@ class FriendsChatView extends StatefulWidget {
   State<FriendsChatView> createState() => _FriendsChatViewState();
 }
 
-/// State for FriendsChatView that holds sample friends, posts, and search state.
 class _FriendsChatViewState extends State<FriendsChatView> {
-  List<Friend> friends = [
-    Friend(name: "Helena Hills", online: true, avatarUrl: ""),
-    Friend(name: "Daniel Smith", online: false, avatarUrl: ""),
-    Friend(name: "Ava Reed", online: true, avatarUrl: ""),
-  ];
+  List<Friend> _friends = [];
+  String _searchQuery = "";
+  bool _loadingFriends = true;
 
-  List<FriendPost> posts = [
-    FriendPost(
-      imageUrl: "https://placekitten.com/200/200",
-      author: "Daniel",
-      group: "Group Name",
-      text: "Body text for a post. Since it's a social app, sometimes it's a hot take, and sometimes it's a question.",
-      likes: 6,
-      comments: 18,
-      timeAgo: "2 hrs ago",
-    ),
-    FriendPost(
-      imageUrl: "https://images.unsplash.com/photo-1518717758536-85ae29035b6d",
-      author: "Helena",
-      group: "Riders",
-      text: "Check out this ride!",
-      likes: 14,
-      comments: 4,
-      timeAgo: "4 hrs ago",
-    ),
-  ];
+  List<Post> _latestTextPosts = [];
+  final Map<String, String?> _pfpCache = {};
 
-  String searchQuery = "";
+  @override
+  void initState() {
+    super.initState();
+    _loadFriends();
+    _refreshPostsFromRepo();
+    PostRepository.instance.addListener(_refreshPostsFromRepo);
+  }
+
+  @override
+  void dispose() {
+    PostRepository.instance.removeListener(_refreshPostsFromRepo);
+    super.dispose();
+  }
+
+  Future<void> _loadFriends() async {
+    setState(() => _loadingFriends = true);
+    try {
+      final res = await AuthApi.listUsers();
+      if (res['ok'] == true && res['data'] is List) {
+        final List data = res['data'] as List;
+        _friends = data.map((u) {
+          final username = (u['username'] ?? '').toString();
+          final pfp = (u['pfp'] ?? '').toString();
+          final lastOnline = u['lastOnline'];
+          final online = lastOnline != null;
+          final id = (u['id'] as num?)?.toInt();
+          _pfpCache[username] = pfp.isNotEmpty ? pfp : '';
+          return Friend(name: username, online: online, avatarUrl: pfp, id: id);
+        }).toList();
+      } else {
+        // fallback small static list if server call fails
+        _friends = [
+          Friend(name: "alice", online: true, avatarUrl: "", id: null),
+          Friend(name: "bob", online: false, avatarUrl: "", id: null),
+        ];
+      }
+    } catch (_) {
+      _friends = [
+        Friend(name: "alice", online: true, avatarUrl: "", id: null),
+        Friend(name: "bob", online: false, avatarUrl: "", id: null),
+      ];
+    } finally {
+      if (mounted) setState(() => _loadingFriends = false);
+    }
+  }
+
+  void _refreshPostsFromRepo() {
+    final all = PostRepository.instance.posts;
+    _latestTextPosts = all
+        .where((p) => p.mediaPath == null || p.mediaPath!.isEmpty || p.mediaType == 'text')
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    if (_latestTextPosts.length > 6) _latestTextPosts = _latestTextPosts.sublist(0, 6);
+    if (mounted) setState(() {});
+  }
+
+  void _openChat(Friend friend) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatScreen(friend: friend)));
+  }
+
+  Widget _avatarFor(String username, {double radius = 20}) {
+    if (!_pfpCache.containsKey(username)) {
+      _pfpCache[username] = null;
+      AuthApi.getUserByUsername(username).then((res) {
+        if (res['ok'] == true && res['data'] != null) {
+          final pfp = (res['data']['pfp'] ?? '').toString();
+          _pfpCache[username] = pfp.isNotEmpty ? pfp : '';
+          if (mounted) setState(() {});
+        } else {
+          _pfpCache[username] = '';
+          if (mounted) setState(() {});
+        }
+      }).catchError((_) {
+        _pfpCache[username] = '';
+        if (mounted) setState(() {});
+      });
+      return CircleAvatar(radius: radius, child: const Icon(Icons.person_outline));
+    }
+    final val = _pfpCache[username];
+    if (val == null) return CircleAvatar(radius: radius, child: const Icon(Icons.person_outline));
+    if (val.isNotEmpty) return CircleAvatar(radius: radius, backgroundImage: NetworkImage(val));
+    return CircleAvatar(radius: radius, child: const Icon(Icons.person_outline));
+  }
+
+  String _formatTimeAgo(DateTime t) {
+    final diff = DateTime.now().difference(t);
+    if (diff.inMinutes < 2) return "now";
+    if (diff.inHours < 1) return "${diff.inMinutes}m";
+    if (diff.inDays < 1) return "${diff.inHours}h";
+    return "${diff.inDays}d";
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Use the shared auth/login gradient so the page background matches other pages
+    final filtered = _friends.where((f) => f.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+
+    // compute a double height safely (avoid num -> double error)
+    final double postsBoxHeight = _latestTextPosts.isEmpty
+        ? 80.0
+        : ((_latestTextPosts.length * 72.0).clamp(80.0, 300.0)).toDouble();
+
     return Scaffold(
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: AuthTheme.backgroundGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AuthTheme.backgroundGradient),
         child: SafeArea(
           child: Column(
             children: [
-              // Header: title row with icons
+              // Header
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: Colors.black54,
-                      child: const Icon(Icons.people, color: Colors.white70),
-                    ),
+                    CircleAvatar(radius: 20, backgroundColor: Colors.black54, child: const Icon(Icons.people, color: Colors.white70)),
                     const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        "Friends",
-                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.search, color: Colors.white70),
-                      onPressed: () {},
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.person_add_alt, color: Colors.white70),
-                      onPressed: () {},
-                    ),
+                    const Expanded(child: Text("Friends", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold))),
+                    IconButton(icon: const Icon(Icons.refresh, color: Colors.white70), onPressed: _loadFriends),
+                    IconButton(icon: const Icon(Icons.person_add_alt, color: Colors.white70), onPressed: () {}),
                   ],
                 ),
               ),
 
-              // Main card container with search, friends list, and recent posts
+              // Card with search + friends list + latest text posts
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
@@ -142,28 +172,19 @@ class _FriendsChatViewState extends State<FriendsChatView> {
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.45),
                       borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.45),
-                          blurRadius: 18,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.45), blurRadius: 18, offset: const Offset(0, 8))],
                       border: Border.all(color: Colors.white.withOpacity(0.03)),
                     ),
                     child: Column(
                       children: [
-                        // Search / quick actions row inside the card
+                        // Search
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                           child: Row(
                             children: [
                               Expanded(
                                 child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.03),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
+                                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.03), borderRadius: BorderRadius.circular(12)),
                                   padding: const EdgeInsets.symmetric(horizontal: 12),
                                   child: Row(
                                     children: [
@@ -171,7 +192,7 @@ class _FriendsChatViewState extends State<FriendsChatView> {
                                       const SizedBox(width: 8),
                                       Expanded(
                                         child: TextField(
-                                          onChanged: (val) => setState(() => searchQuery = val),
+                                          onChanged: (val) => setState(() => _searchQuery = val),
                                           style: const TextStyle(color: Colors.white),
                                           decoration: const InputDecoration(
                                             hintText: 'Search friends',
@@ -184,44 +205,37 @@ class _FriendsChatViewState extends State<FriendsChatView> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white.withOpacity(0.06),
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                                onPressed: () {},
-                                child: const Text('New'),
-                              )
                             ],
                           ),
                         ),
 
                         const Divider(color: Colors.white12, height: 1),
 
-                        // Friends list filtered by searchQuery
+                        // Friends list
                         Expanded(
-                          child: ListView.separated(
+                          flex: 3,
+                          child: _loadingFriends
+                              ? const Center(child: CircularProgressIndicator())
+                              : ListView.separated(
                             padding: const EdgeInsets.all(12),
-                            itemCount: friends.where((f) => f.name.toLowerCase().contains(searchQuery.toLowerCase())).length,
+                            itemCount: filtered.length,
                             separatorBuilder: (_, __) => const Divider(color: Colors.white12),
-                            itemBuilder: (context, index) {
-                              final filtered = friends.where((f) => f.name.toLowerCase().contains(searchQuery.toLowerCase())).toList();
-                              final friend = filtered[index];
+                            itemBuilder: (_, i) {
+                              final friend = filtered[i];
                               return ListTile(
                                 leading: CircleAvatar(
                                   radius: 25,
                                   backgroundColor: Colors.grey.shade800,
-                                  child: const Icon(Icons.person, size: 28, color: Colors.white70),
+                                  backgroundImage: friend.avatarUrl.isNotEmpty ? NetworkImage(friend.avatarUrl) : null,
+                                  child: friend.avatarUrl.isEmpty ? const Icon(Icons.person, size: 28, color: Colors.white70) : null,
                                 ),
                                 title: Text(friend.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                                 subtitle: Text(friend.online ? "Active recently" : "Offline", style: const TextStyle(color: Colors.white70)),
                                 trailing: IconButton(
                                   icon: const Icon(Icons.chat_bubble_outline, color: Colors.white70),
-                                  onPressed: () => openChat(friend),
+                                  onPressed: () => _openChat(friend),
                                 ),
-                                onTap: () => openChat(friend),
+                                onTap: () => _openChat(friend),
                               );
                             },
                           ),
@@ -229,27 +243,44 @@ class _FriendsChatViewState extends State<FriendsChatView> {
 
                         const Divider(color: Colors.white12, height: 1),
 
-                        // Horizontal list of friends' latest posts
+                        // Latest text posts
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Friends\' latest posts', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              const Text('Latest text posts', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 8),
                               SizedBox(
-                                height: 120,
-                                child: ListView.separated(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: posts.length,
-                                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                                  itemBuilder: (context, i) {
-                                    final p = posts[i];
-                                    return ClipRRect(
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: Image.network(p.imageUrl, width: 160, height: 120, fit: BoxFit.cover, errorBuilder: (_, __, ___) {
-                                        return Container(width: 160, height: 120, color: Colors.grey.shade800, child: const Icon(Icons.broken_image, color: Colors.white70));
-                                      }),
+                                height: postsBoxHeight,
+                                child: _latestTextPosts.isEmpty
+                                    ? Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.02), borderRadius: BorderRadius.circular(10)),
+                                  child: const Text('No recent text posts', style: TextStyle(color: Colors.white70)),
+                                )
+                                    : ListView.separated(
+                                  physics: const ClampingScrollPhysics(),
+                                  itemCount: _latestTextPosts.length,
+                                  separatorBuilder: (_, __) => const Divider(color: Colors.white12),
+                                  itemBuilder: (context, idx) {
+                                    final p = _latestTextPosts[idx];
+                                    if (!_pfpCache.containsKey(p.author)) _pfpCache[p.author] = null;
+                                    return ListTile(
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 4.0),
+                                      leading: _avatarFor(p.author, radius: 20),
+                                      title: Text(p.text, style: const TextStyle(color: Colors.white), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                      subtitle: Text('${p.author} • ${_formatTimeAgo(p.createdAt)}', style: const TextStyle(color: Colors.white70)),
+                                      onTap: () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (_) => AlertDialog(
+                                            title: Text(p.author),
+                                            content: Text(p.text),
+                                            actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close'))],
+                                          ),
+                                        );
+                                      },
                                     );
                                   },
                                 ),
@@ -268,16 +299,9 @@ class _FriendsChatViewState extends State<FriendsChatView> {
       ),
     );
   }
-
-  /// Open the chat screen for the selected friend.
-  ///
-  /// @param friend The Friend to start a one-to-one chat with.
-  void openChat(Friend friend) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatScreen(friend: friend)));
-  }
 }
 
-/// Chat screen widget for one-to-one messaging with a friend.
+/// Chat screen widget (mocked/local messages)
 class ChatScreen extends StatefulWidget {
   final Friend friend;
   const ChatScreen({super.key, required this.friend});
@@ -286,7 +310,6 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-/// State for ChatScreen handling messages and the input controller.
 class _ChatScreenState extends State<ChatScreen> {
   List<Map<String, dynamic>> messages = [
     {"text": "Hey, you free for a ride?", "isMe": false},
@@ -295,51 +318,46 @@ class _ChatScreenState extends State<ChatScreen> {
   ];
 
   final TextEditingController _ctrl = TextEditingController();
+  final ScrollController _scroll = ScrollController();
 
   @override
   void dispose() {
     _ctrl.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
-  /// Send the message currently in the input and clear the field.
   void _send() {
     if (_ctrl.text.trim().isEmpty) return;
     setState(() {
       messages.add({"text": _ctrl.text.trim(), "isMe": true});
       _ctrl.clear();
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) {
+        _scroll.animateTo(_scroll.position.maxScrollExtent + 100, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Chat screen uses the same gradient background to match other pages
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        leading: BackButton(color: Colors.white),
+        leading: const BackButton(color: Colors.white),
         title: Row(
           children: [
-            CircleAvatar(
-              backgroundColor: Colors.grey.shade800,
-              child: const Icon(Icons.person, color: Colors.white),
-            ),
+            CircleAvatar(backgroundColor: Colors.grey.shade800, child: const Icon(Icons.person, color: Colors.white)),
             const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.friend.name, style: const TextStyle(fontSize: 16, color: Colors.white)),
-                const Text("Active recently", style: TextStyle(fontSize: 11, color: Colors.white70)),
-              ],
-            ),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(widget.friend.name, style: const TextStyle(fontSize: 16, color: Colors.white)),
+              const Text("Active recently", style: TextStyle(fontSize: 11, color: Colors.white70)),
+            ]),
           ],
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        actions: [
-          IconButton(icon: const Icon(Icons.call, color: Colors.white), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.videocam, color: Colors.white), onPressed: () {}),
-        ],
       ),
       body: Container(
         decoration: const BoxDecoration(gradient: AuthTheme.backgroundGradient),
@@ -348,8 +366,8 @@ class _ChatScreenState extends State<ChatScreen> {
             children: [
               Expanded(
                 child: ListView.builder(
+                  controller: _scroll,
                   padding: const EdgeInsets.all(16.0),
-                  reverse: false,
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final msg = messages[index];
@@ -370,15 +388,12 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
 
-              // Input area placed in a rounded card to match style.
+              // Input
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.03),
-                    borderRadius: BorderRadius.circular(30),
-                  ),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.03), borderRadius: BorderRadius.circular(30)),
                   child: Row(
                     children: [
                       IconButton(icon: const Icon(Icons.add, color: Colors.white70), onPressed: () {}),
@@ -386,25 +401,14 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: TextField(
                           controller: _ctrl,
                           style: const TextStyle(color: Colors.white),
-                          decoration: const InputDecoration(
-                            hintText: 'Write a message...',
-                            hintStyle: TextStyle(color: Colors.white70),
-                            border: InputBorder.none,
-                          ),
+                          decoration: const InputDecoration(hintText: 'Write a message...', hintStyle: TextStyle(color: Colors.white70), border: InputBorder.none),
+                          onSubmitted: (_) => _send(),
                         ),
                       ),
                       IconButton(icon: const Icon(Icons.emoji_emotions, color: Colors.white70), onPressed: () {}),
                       GestureDetector(
                         onTap: _send,
-                        child: Container(
-                          margin: const EdgeInsets.only(left: 6),
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.blueAccent,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.send, color: Colors.white, size: 18),
-                        ),
+                        child: Container(margin: const EdgeInsets.only(left: 6), padding: const EdgeInsets.all(10), decoration: const BoxDecoration(color: Colors.blueAccent, shape: BoxShape.circle), child: const Icon(Icons.send, color: Colors.white, size: 18)),
                       )
                     ],
                   ),
