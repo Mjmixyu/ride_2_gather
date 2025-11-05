@@ -1,5 +1,5 @@
 /**
- * feed_view2.dart
+ * feed_view.dart
  *
  * File-level Dartdoc:
  * Displays the main feed content including a small featured carousel of the
@@ -15,6 +15,7 @@ import '../services/post_repository.dart';
 import '../models/post.dart';
 import '../theme/auth_theme.dart';
 import 'post_viewer.dart';
+import 'login_view.dart';
 
 /// Feed view that shows the app title, user avatar, a carousel of image posts,
 /// a scrolling list of text posts, and a featured news card.
@@ -22,9 +23,8 @@ import 'post_viewer.dart';
 /// The view listens to PostRepository updates and refreshes its internal lists.
 class FeedView extends StatefulWidget {
   final String username; // logged-in username
-  final VoidCallback onProfileTap;
 
-  const FeedView({super.key, required this.username, required this.onProfileTap});
+  const FeedView({super.key, required this.username});
 
   @override
   State<FeedView> createState() => _FeedViewState();
@@ -156,6 +156,18 @@ class _FeedViewState extends State<FeedView> {
     return CircleAvatar(radius: radius, child: const Icon(Icons.person_outline));
   }
 
+  /// Perform logout: currently navigates to LoginView and clears the route stack.
+  /// Extend this to clear local tokens/shared_preferences or call a server logout endpoint if you need.
+  void _performLogout() {
+    // If you store auth tokens in shared_preferences, clear them here.
+    // Example (uncomment if using shared_preferences):
+    // final prefs = await SharedPreferences.getInstance();
+    // await prefs.remove('auth_token');
+
+    // Navigate back to login and remove this screen from the stack.
+    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const LoginView()));
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -175,7 +187,7 @@ class _FeedViewState extends State<FeedView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top Title Row: show logged-in user's pfp on the right (routing uses onProfileTap)
+                // Top Title Row: show logged-in user's pfp on the right (profile routing removed)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12),
                   child: Row(
@@ -185,9 +197,34 @@ class _FeedViewState extends State<FeedView> {
                         "ride2gather",
                         style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
-                      GestureDetector(
-                        onTap: widget.onProfileTap,
-                        child: _avatarFor(widget.username, radius: 18),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Logout icon button (placed left of avatar)
+                          IconButton(
+                            icon: const Icon(Icons.logout, color: Colors.white70),
+                            tooltip: 'Logout',
+                            onPressed: () async {
+                              // Simple confirmation dialog
+                              final doLogout = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Logout'),
+                                  content: const Text('Bist du sicher, dass du dich abmelden möchtest?'),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Abbrechen')),
+                                    TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Abmelden')),
+                                  ],
+                                ),
+                              );
+                              if (doLogout == true) {
+                                _performLogout();
+                              }
+                            },
+                          ),
+                          // avatar shown as static (no onTap/profile routing)
+                          _avatarFor(widget.username, radius: 18),
+                        ],
                       ),
                     ],
                   ),

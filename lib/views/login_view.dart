@@ -14,6 +14,7 @@ import '../theme/auth_theme.dart';
 import '../core/auth_api.dart';
 import '../core/homeFeed_routing.dart';
 import 'signup_view.dart';
+import 'mfa_view.dart';
 
 /// LoginView is a stateful widget that renders the login form.
 ///
@@ -37,6 +38,57 @@ class _LoginViewState extends State<LoginView> {
     identityController.dispose();
     passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _showPasswordResetDialog() async {
+    final TextEditingController emailController = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Password vergessen'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Gib deine E‑Mail an. Ein Reset-Link (oder Code) wird gesendet.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: emailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(hintText: 'E-Mail'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Abbrechen')),
+          ElevatedButton(
+            onPressed: () async {
+              final email = emailController.text.trim();
+              if (email.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bitte E‑Mail eingeben')));
+                return;
+              }
+              Navigator.pop(ctx);
+              final res = await AuthApi.passwordResetRequest(email: email);
+              if (res['ok'] == true) {
+                final data = res['data'];
+                if (data is Map && data['mock'] == true) {
+                  // show mock reset info (for local testing)
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Mock reset: code=${data['reset_code']}')),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reset E‑Mail gesendet')));
+                }
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Fehler: ${res['error'] ?? 'unknown'}')));
+              }
+            },
+            child: const Text('Senden'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -142,7 +194,15 @@ class _LoginViewState extends State<LoginView> {
                               },
                             ),
                           ),
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 18),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: GestureDetector(
+                              onTap: _showPasswordResetDialog,
+                              child: const Text('Passwort vergessen?', style: AuthTheme.linkStyle),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
                           SizedBox(
                             width: double.infinity,
                             height: 55,
@@ -163,15 +223,47 @@ class _LoginViewState extends State<LoginView> {
                                     if (mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(content: Text('Login successful!')));
-                                      Navigator.pushReplacement(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (ctx) => HomeFeed(
-                                            username: user['username'],
-                                            userId: user['id'],
+                                      // If user has MFA enabled, navigate to MFA view
+                                      final mfaEnabled = (user is Map && (user['mfa_enabled'] == true));
+                                      if (mfaEnabled) {
+                                        // If backend would send OTP, we request it here
+                                        final req = await AuthApi.requestMfaOtp(userId: user['id'], method: 'email');
+                                        String? expectedOtp;
+                                        if (req['ok'] == true && req['data'] is Map && req['data']['mock'] == true) {
+                                          expectedOtp = req['data']['otp']?.toString();
+                                          // For mock: show OTP in snackbar for testing
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Mock OTP: $expectedOtp')),
+                                          );
+                                        }
+                                        Navigator.pushReplacement(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (ctx) => MfaView(
+                                              userId: user['id'],
+                                              expectedOtpForMock: expectedOtp,
+                                              onVerified: () {
+                                                Navigator.pushReplacement(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (ctx) => HomeFeed(username: user['username'], userId: user['id']),
+                                                  ),
+                                                );
+                                              },
+                                            ),
                                           ),
-                                        ),
-                                      );
+                                        );
+                                      } else {
+                                        Navigator.pushReplacement(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (ctx) => HomeFeed(
+                                              username: user['username'],
+                                              userId: user['id'],
+                                            ),
+                                          ),
+                                        );
+                                      }
                                     }
                                   } else {
                                     final err = (result['error'] ?? 'Login failed').toString();

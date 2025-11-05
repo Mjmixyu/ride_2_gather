@@ -8,6 +8,9 @@
  * success navigates to the HomeFeed. Uses AuthTheme for consistent styling.
  *
  * Note: preserves a developer reminder about restarting the server as requested.
+ *
+ * NOTE: This file has been extended to include a mandatory user/privacy
+ * agreement checkbox that must be accepted before the user may sign up.
  */
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -48,11 +51,17 @@ class _SignUpViewState extends State<SignUpView> {
 
   String _selectedCountryCode = "";
 
+  // New: mandatory agreement checkbox
+  bool _agreedToPrivacy = false;
+
   // Practical, user-facing email regexp:
   // - requires something@something.tld
   // - disallows spaces and ensures at least 2 chars for final TLD part
   // This is a pragmatic compromise — server-side validation should also be used.
-  final RegExp _emailRegExp = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$', caseSensitive: false);
+  final RegExp _emailRegExp = RegExp(
+    r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$',
+    caseSensitive: false,
+  );
 
   /// Dispose controllers when the widget is removed from the tree to free
   /// resources and avoid memory leaks.
@@ -72,6 +81,7 @@ class _SignUpViewState extends State<SignUpView> {
   /// - Password TextFormField with visibility toggle and length validation.
   /// - Optional country selector.
   /// - Sign Up button that calls AuthApi.signup and handles navigation/errors.
+  /// - Mandatory user / privacy agreement checkbox (must be checked to sign up).
   @override
   Widget build(BuildContext context) {
     final SimpleUIController simpleUIController = Get.put(SimpleUIController());
@@ -80,9 +90,7 @@ class _SignUpViewState extends State<SignUpView> {
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: AuthTheme.backgroundGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AuthTheme.backgroundGradient),
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
@@ -116,7 +124,10 @@ class _SignUpViewState extends State<SignUpView> {
                     const SizedBox(height: 25),
                     const Text('Sign Up', style: AuthTheme.titleStyle),
                     const SizedBox(height: 6),
-                    const Text('Create your account', style: AuthTheme.subtitleStyle),
+                    const Text(
+                      'Create your account',
+                      style: AuthTheme.subtitleStyle,
+                    ),
                     const SizedBox(height: 35),
 
                     // Main rounded card containing the input fields and button
@@ -181,22 +192,26 @@ class _SignUpViewState extends State<SignUpView> {
 
                           // Password field with visibility toggle and validation
                           Obx(
-                                () => TextFormField(
+                            () => TextFormField(
                               controller: passwordController,
                               style: const TextStyle(color: Colors.white),
                               obscureText: simpleUIController.isObscure.value,
-                              decoration: AuthTheme.textFieldDecoration(
-                                hintText: 'Password',
-                                icon: Icons.lock_outline,
-                              ).copyWith(
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    simpleUIController.isObscure.value ? Icons.visibility : Icons.visibility_off,
-                                    color: Colors.white70,
+                              decoration:
+                                  AuthTheme.textFieldDecoration(
+                                    hintText: 'Password',
+                                    icon: Icons.lock_outline,
+                                  ).copyWith(
+                                    suffixIcon: IconButton(
+                                      icon: Icon(
+                                        simpleUIController.isObscure.value
+                                            ? Icons.visibility
+                                            : Icons.visibility_off,
+                                        color: Colors.white70,
+                                      ),
+                                      onPressed: () =>
+                                          simpleUIController.isObscureActive(),
+                                    ),
                                   ),
-                                  onPressed: () => simpleUIController.isObscureActive(),
-                                ),
-                              ),
                               validator: (value) {
                                 if (value == null || value.isEmpty) {
                                   return 'Please enter password';
@@ -221,16 +236,62 @@ class _SignUpViewState extends State<SignUpView> {
                             items: countryList
                                 .map(
                                   (c) => DropdownMenuItem<String>(
-                                value: c['code'],
-                                child: Text(c['name'] ?? ''),
-                              ),
-                            )
+                                    value: c['code'],
+                                    child: Text(c['name'] ?? ''),
+                                  ),
+                                )
                                 .toList(),
                             onChanged: (val) {
                               setState(() => _selectedCountryCode = val ?? "");
                             },
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
+
+                          // New: mandatory user / privacy agreement
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Checkbox(
+                                value: _agreedToPrivacy,
+                                onChanged: (v) {
+                                  setState(() {
+                                    _agreedToPrivacy = v ?? false;
+                                  });
+                                },
+                              ),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () {
+                                    // Open a simple dialog with the agreement text
+                                    showDialog(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        title: const Text(
+                                          'User / Privacy Agreement',
+                                        ),
+                                        content: const SingleChildScrollView(
+                                          child: Text(
+                                            'By creating an account you agree that location data may be used to display nearby users and routes. This app only shares coarse location with other users. Don\'t share sensitive info.',
+                                          ),
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(ctx),
+                                            child: const Text('Close'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                  child: const Text(
+                                    'I agree to the User / Privacy Agreement (required)',
+                                    style: TextStyle(color: Colors.white70),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
 
                           // Sign Up button that validates and calls AuthApi.signup
                           SizedBox(
@@ -241,56 +302,100 @@ class _SignUpViewState extends State<SignUpView> {
                               onPressed: _loading
                                   ? null
                                   : () async {
-                                if (!_formKey.currentState!.validate()) return;
-                                final username = nameController.text.trim();
-                                final email = emailController.text.trim();
-                                final password = passwordController.text;
-                                setState(() => _loading = true);
-                                try {
-                                  final result = await AuthApi.signup(
-                                    email: email,
-                                    username: username,
-                                    password: password,
-                                    countryCode: _selectedCountryCode,
-                                  );
-                                  if (result['ok'] == true) {
-                                    final user = result['data'];
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Account created!')),
-                                      );
-                                      Navigator.pushReplacement(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (ctx) => HomeFeed(username: username, userId: user['id']),
-                                        ),
-                                      );
-                                    }
-                                  } else {
-                                    final err = (result['error'] ?? 'Signup failed').toString();
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
-                                    }
-                                  }
-                                } catch (e) {
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(SnackBar(content: Text('Network error: $e')));
-                                  }
-                                } finally {
-                                  if (mounted) setState(() => _loading = false);
-                                }
-                              },
+                                      if (!_formKey.currentState!.validate())
+                                        return;
+                                      if (!_agreedToPrivacy) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'You must accept the agreement to sign up',
+                                            ),
+                                          ),
+                                        );
+                                        return;
+                                      }
+                                      final username = nameController.text
+                                          .trim();
+                                      final email = emailController.text.trim();
+                                      final password = passwordController.text;
+                                      setState(() => _loading = true);
+                                      try {
+                                        final result = await AuthApi.signup(
+                                          email: email,
+                                          username: username,
+                                          password: password,
+                                          countryCode: _selectedCountryCode,
+                                        );
+                                        if (result['ok'] == true) {
+                                          final user = result['data'];
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  'Account created!',
+                                                ),
+                                              ),
+                                            );
+                                            Navigator.pushReplacement(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (ctx) => HomeFeed(
+                                                  username: username,
+                                                  userId: user['id'],
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        } else {
+                                          final err =
+                                              (result['error'] ??
+                                                      'Signup failed')
+                                                  .toString();
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(content: Text(err)),
+                                            );
+                                          }
+                                        }
+                                      } catch (e) {
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                'Network error: $e',
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      } finally {
+                                        if (mounted)
+                                          setState(() => _loading = false);
+                                      }
+                                    },
                               child: _loading
                                   ? const SizedBox(
-                                height: 22,
-                                width: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                                  : const Text('Sign Up', style: TextStyle(fontSize: 18, color: Colors.white)),
+                                      height: 22,
+                                      width: 22,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Sign Up',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        color: Colors.white,
+                                      ),
+                                    ),
                             ),
                           ),
                         ],
@@ -305,7 +410,9 @@ class _SignUpViewState extends State<SignUpView> {
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (ctx) => const LoginView()),
+                          MaterialPageRoute(
+                            builder: (ctx) => const LoginView(),
+                          ),
                         );
                         nameController.clear();
                         emailController.clear();
@@ -318,7 +425,10 @@ class _SignUpViewState extends State<SignUpView> {
                           text: 'Already have an account? ',
                           style: TextStyle(color: Colors.white70),
                           children: [
-                            TextSpan(text: 'Log In', style: AuthTheme.linkStyle),
+                            TextSpan(
+                              text: 'Log In',
+                              style: AuthTheme.linkStyle,
+                            ),
                           ],
                         ),
                       ),

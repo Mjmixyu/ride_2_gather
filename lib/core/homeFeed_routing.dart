@@ -1,5 +1,5 @@
 /**
- * home_feed.dart
+ * homeFeed_routing.dart
  *
  * File-level Dartdoc:
  * Defines the HomeFeed widget which provides the main bottom-tab navigation
@@ -39,7 +39,9 @@ class _HomeFeedState extends State<HomeFeed> {
   void initState() {
     super.initState();
     _pages = [
-      FeedView(onProfileTap: _onProfileNav, username: widget.username),
+      // Removed the onProfileTap routing from HomeFeed → FeedView.
+      // FeedView will still display the avatar but it no longer routes back to the UserProfile page.
+      FeedView(username: widget.username),
       const MapView(),
       AddPostView(author: widget.username),
       const FriendsChatView(),
@@ -71,15 +73,6 @@ class _HomeFeedState extends State<HomeFeed> {
   void dispose() {
     PostRepository.instance.tabRequest.removeListener(_tabListener);
     super.dispose();
-  }
-
-  /// Switches view to the profile tab.
-  ///
-  /// This helper sets the selected tab index to the profile page index.
-  void _onProfileNav() {
-    setState(() {
-      _selectedIndex = 4;
-    });
   }
 
   /// Handler for tap events on the bottom navigation bar.

@@ -1,15 +1,4 @@
-/**
- * map_view.dart
- *
- * File-level Dartdoc:
- * Map view that displays map tiles, user pins, and author overlays. Reads
- * pins and posts from PostRepository and computes overlays for authors'
- * latest geo-tagged posts. Allows adding pins and tapping markers to view
- * details. Uses flutter_map with OpenStreetMap tiles.
- */
 import 'dart:async';
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -19,19 +8,15 @@ import '../core/auth_api.dart';
 import '../services/post_repository.dart';
 import '../models/post.dart';
 
-/// MapView widget that shows a map with pins and author markers.
-///
-/// It loads cached posts/pins from the repository, computes overlay widget
-/// positions and handles taps/long-presses for viewing or creating pins.
 class MapView extends StatefulWidget {
   const MapView({super.key});
-
   @override
   State<MapView> createState() => _MapViewState();
 }
 
 class _MapViewState extends State<MapView> {
   final MapController _mapController = MapController();
+
   LatLng _center = const LatLng(48.2082, 16.3738);
   double _zoom = 11.0;
 
@@ -39,10 +24,19 @@ class _MapViewState extends State<MapView> {
   List<MapPin> _pins = [];
 
   final Map<String, String?> _pfpCache = {};
-  final Map<String, Offset> _overlayOffsets = {};
   final Distance _distance = const Distance();
 
   StreamSubscription<MapEvent>? _mapEventSub;
+
+  // UI state
+  bool _ghostMode = false;
+  bool _routeMarking = false;
+  final List<LatLng> _routePoints = [];
+
+  // Mock current user (replace with real location/pfp in prod)
+  String _currentUsername = 'you';
+  String? _currentUserPfp;
+  LatLng _currentUserLocation = const LatLng(48.2082, 16.3738);
 
   @override
   void initState() {
@@ -50,10 +44,18 @@ class _MapViewState extends State<MapView> {
     _loadInitialBounds();
     _refreshFromRepo();
     PostRepository.instance.addListener(_onRepoUpdated);
-    _mapEventSub = _mapController.mapEventStream?.listen((_) {
-      _updateOverlays();
+
+    _mapEventSub = _mapController.mapEventStream.listen((evt) {
+      // keep center/zoom in sync with camera
+      _center = evt.camera.center;
+      _zoom = evt.camera.zoom;
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _updateOverlays());
+
+    _fetchAndCachePfp(_currentUsername);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _posts.isEmpty) _injectMockUsers();
+    });
   }
 
   @override
@@ -63,7 +65,6 @@ class _MapViewState extends State<MapView> {
     super.dispose();
   }
 
-  /// Load a preferred initial map center from stored country code if available.
   Future<void> _loadInitialBounds() async {
     try {
       final code = await PostRepository.instance.getStoredCountryCode();
@@ -72,18 +73,21 @@ class _MapViewState extends State<MapView> {
         setState(() {
           _center = center;
           _zoom = 11.0;
+          _currentUserLocation = center;
         });
       } else {
         _center = center;
         _zoom = 11.0;
+        _currentUserLocation = center;
       }
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _mapController.move(_center, _zoom);
+        try {
+          if (mounted) _mapController.move(_center, _zoom);
+        } catch (_) {}
       });
     } catch (_) {}
   }
 
-  /// Convert a two-letter country code into a reasonable LatLng center.
   LatLng _centerFromCountryCode(String? code) {
     if (code == null || code.isEmpty) return const LatLng(48.2082, 16.3738);
     switch (code.toUpperCase()) {
@@ -117,7 +121,6 @@ class _MapViewState extends State<MapView> {
     }
   }
 
-  /// Refresh local posts and pins from the PostRepository and prefetch pfps.
   void _refreshFromRepo() {
     final all = PostRepository.instance.posts;
     final pins = PostRepository.instance.pins;
@@ -125,18 +128,17 @@ class _MapViewState extends State<MapView> {
       _posts = all;
       _pins = pins;
     });
-
     for (final p in _posts) {
-      if (p.author.isNotEmpty && !_pfpCache.containsKey(p.author)) _fetchAndCachePfp(p.author);
+      if (p.author.isNotEmpty && !_pfpCache.containsKey(p.author)) {
+        _fetchAndCachePfp(p.author);
+      }
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) => _updateOverlays());
   }
 
   void _onRepoUpdated() {
     if (mounted) _refreshFromRepo();
   }
 
-  /// Fetch a user's profile picture and cache the result to avoid repeated calls.
   Future<void> _fetchAndCachePfp(String username) async {
     if (username.isEmpty) return;
     if (_pfpCache.containsKey(username)) return;
@@ -146,61 +148,46 @@ class _MapViewState extends State<MapView> {
       if (res['ok'] == true && res['data'] != null) {
         final pfp = (res['data']['pfp'] ?? '') as String;
         _pfpCache[username] = pfp.isNotEmpty ? pfp : '';
+        if (username == _currentUsername) _currentUserPfp = _pfpCache[username];
       } else {
         _pfpCache[username] = '';
+        if (username == _currentUsername) _currentUserPfp = '';
       }
     } catch (_) {
       _pfpCache[username] = '';
+      if (username == _currentUsername) _currentUserPfp = '';
     }
     if (mounted) setState(() {});
-    WidgetsBinding.instance.addPostFrameCallback((_) => _updateOverlays());
   }
 
-  /// Build a map of the most recent post per author that includes location.
   Map<String, Post> _latestByAuthorWithLocation() {
     final Map<String, Post> latestByAuthor = {};
     for (final p in _posts) {
       if (p.lat == null || p.lon == null) continue;
       final prev = latestByAuthor[p.author];
-      if (prev == null || p.createdAt.isAfter(prev.createdAt)) latestByAuthor[p.author] = p;
+      if (prev == null || p.createdAt.isAfter(prev.createdAt)) {
+        latestByAuthor[p.author] = p;
+      }
     }
     return latestByAuthor;
   }
 
-  /// Compute screen-space offsets for overlays based on map projection.
-  void _updateOverlays() {
-    try {
-      final latest = _latestByAuthorWithLocation();
-      final Map<String, Offset> newOffsets = {};
-      for (final entry in latest.entries) {
-        final author = entry.key;
-        final post = entry.value;
-        if (post.lat == null || post.lon == null) continue;
-        try {
-          final screenPoint = _mapController.latLngToScreenPoint(LatLng(post.lat!, post.lon!));
-          newOffsets[author] = Offset(screenPoint.x.toDouble(), screenPoint.y.toDouble());
-        } catch (_) {}
-      }
-      if (mounted) {
-        setState(() {
-          _overlayOffsets
-            ..clear()
-            ..addAll(newOffsets);
-        });
-      }
-    } catch (_) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _updateOverlays());
-    }
-  }
-
-  /// Handle taps on the map: open pin sheet or post sheet when near a marker.
   void _handleTap(LatLng tapped) {
+    if (_routeMarking) {
+      setState(() => _routePoints.add(tapped));
+      return;
+    }
+
     const thresholdMeters = 60;
 
     MapPin? nearestPin;
     double nearestPinDist = double.infinity;
     for (final pin in _pins) {
-      final d = _distance.as(LengthUnit.Meter, LatLng(pin.lat, pin.lon), tapped);
+      final d = _distance.as(
+        LengthUnit.Meter,
+        LatLng(pin.lat, pin.lon),
+        tapped,
+      );
       if (d < nearestPinDist) {
         nearestPinDist = d;
         nearestPin = pin;
@@ -216,7 +203,11 @@ class _MapViewState extends State<MapView> {
     final latest = _latestByAuthorWithLocation();
     for (final entry in latest.entries) {
       final p = entry.value;
-      final d = _distance.as(LengthUnit.Meter, LatLng(p.lat!, p.lon!), tapped);
+      final d = _distance.as(
+        LengthUnit.Meter,
+        LatLng(p.lat!, p.lon!),
+        tapped,
+      );
       if (d < nearestPostDist) {
         nearestPostDist = d;
         nearestPostEntry = entry;
@@ -228,16 +219,17 @@ class _MapViewState extends State<MapView> {
     }
   }
 
-  /// Show a bottom sheet with details for a post marker.
   void _openPostMarkerSheet(Post post) {
     final authorPfp = _pfpCache[post.author];
     showModalBottomSheet(
       context: context,
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(
                 children: [
                   if (authorPfp != null && authorPfp.isNotEmpty)
@@ -245,8 +237,16 @@ class _MapViewState extends State<MapView> {
                   else
                     const CircleAvatar(child: Icon(Icons.person_outline)),
                   const SizedBox(width: 12),
-                  Expanded(child: Text(post.author, style: const TextStyle(fontWeight: FontWeight.bold))),
-                  Text(_formatTimeAgo(post.createdAt), style: const TextStyle(color: Colors.grey)),
+                  Expanded(
+                    child: Text(
+                      post.author,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  Text(
+                    _formatTimeAgo(post.createdAt),
+                    style: const TextStyle(color: Colors.grey),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -260,43 +260,57 @@ class _MapViewState extends State<MapView> {
                 ])
               ],
               const SizedBox(height: 12),
-              ElevatedButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close')),
-            ]),
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Close'),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
-  /// Show a bottom sheet with details for a map pin.
   void _openPinSheet(MapPin pin) {
     showModalBottomSheet(
       context: context,
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(
                 children: [
                   const Icon(Icons.location_pin, color: Colors.redAccent),
                   const SizedBox(width: 12),
-                  Expanded(child: Text(pin.name ?? 'Pin', style: const TextStyle(fontWeight: FontWeight.bold))),
-                  Text(_formatTimeAgo(pin.createdAt), style: const TextStyle(color: Colors.grey)),
+                  Expanded(
+                    child: Text(
+                      pin.name ?? 'Pin',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  Text(
+                    _formatTimeAgo(pin.createdAt),
+                    style: const TextStyle(color: Colors.grey),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
               if (pin.text != null && pin.text!.isNotEmpty) Text(pin.text!),
               const SizedBox(height: 12),
-              ElevatedButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close')),
-            ]),
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Close'),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
-  /// Format a DateTime to a short "time ago" string for display.
   String _formatTimeAgo(DateTime t) {
     final diff = DateTime.now().difference(t);
     if (diff.inMinutes < 2) return "now";
@@ -305,28 +319,25 @@ class _MapViewState extends State<MapView> {
     return "${diff.inDays}d";
   }
 
-  /// Prompt the user to add a pin at the given position using a dialog.
   Future<void> _onLongPressAddPin(LatLng pos) async {
     final nameCtrl = TextEditingController();
     final textCtrl = TextEditingController();
     final bool? res = await showDialog<bool>(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Add Pin'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name (optional)')),
-              TextField(controller: textCtrl, decoration: const InputDecoration(labelText: 'Description (optional)')),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-            ElevatedButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Save')),
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Pin'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name (optional)')),
+            TextField(controller: textCtrl, decoration: const InputDecoration(labelText: 'Description (optional)')),
           ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Save')),
+        ],
+      ),
     );
 
     if (res == true) {
@@ -336,62 +347,172 @@ class _MapViewState extends State<MapView> {
         name: nameCtrl.text.trim().isEmpty ? null : nameCtrl.text.trim(),
         text: textCtrl.text.trim().isEmpty ? null : textCtrl.text.trim(),
       );
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pin added')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pin added')));
+      }
     }
   }
 
-  /// Add a pin at the current center of the map.
-  Future<void> _addPinAtCenter() async {
-    LatLng centerPos = _center;
-    try {
-      final ctr = _mapController.center;
-      if (ctr != null) centerPos = ctr;
-    } catch (_) {}
-    await _onLongPressAddPin(centerPos);
+  Future<void> _addPinAtCenter() => _onLongPressAddPin(_center);
+
+  void _clearRoute() {
+    setState(() {
+      _routePoints.clear();
+      _routeMarking = false;
+    });
+  }
+
+  void _injectMockUsers() {
+    final now = DateTime.now();
+    final nearby = [
+      Post(
+        id: 'mock1',
+        author: 'alice',
+        text: 'Hey from nearby!',
+        createdAt: now.subtract(const Duration(minutes: 3)),
+        lat: _currentUserLocation.latitude + 0.007,
+        lon: _currentUserLocation.longitude + 0.006,
+        locationName: 'Near you', mediaType: '',
+      ),
+      Post(
+        id: 'mock2',
+        author: 'bob',
+        text: 'On a ride',
+        createdAt: now.subtract(const Duration(minutes: 20)),
+        lat: _currentUserLocation.latitude - 0.006,
+        lon: _currentUserLocation.longitude - 0.005,
+        locationName: 'Park', mediaType: '',
+      ),
+      Post(
+        id: 'mock3',
+        author: 'carla',
+        text: 'Coffee stop',
+        createdAt: now.subtract(const Duration(hours: 1)),
+        lat: _currentUserLocation.latitude + 0.01,
+        lon: _currentUserLocation.longitude - 0.008,
+        locationName: 'Cafe', mediaType: '',
+      ),
+    ];
+    setState(() => _posts.addAll(nearby));
+    for (final p in nearby) {
+      _fetchAndCachePfp(p.author);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final latest = _latestByAuthorWithLocation();
-    final pinCircles = _pins.map((pin) {
-      return CircleMarker(
+
+    // pin circles
+    final pinCircles = _pins
+        .map(
+          (pin) => CircleMarker(
         point: LatLng(pin.lat, pin.lon),
         radius: 10.0,
         color: Colors.redAccent.withOpacity(0.95),
         borderStrokeWidth: 2,
         borderColor: Colors.white,
-      );
-    }).toList();
-    final userCircles = latest.entries.map((e) {
-      return CircleMarker(
-        point: LatLng(e.value.lat!, e.value.lon!),
-        radius: 8.0,
-        color: Colors.blueAccent.withOpacity(0.9),
-        borderStrokeWidth: 2,
-        borderColor: Colors.white,
+      ),
+    )
+        .toList();
+
+    final double otherUsersOpacity = _ghostMode ? 0.35 : 0.9;
+
+    // other users as markers (Marker.child API)
+    final List<Marker> otherUserMarkers = latest.entries.map((e) {
+      final p = e.value;
+      final pfp = _pfpCache[p.author];
+      return Marker(
+        point: LatLng(p.lat!, p.lon!),
+        width: 40,
+        height: 40,
+        child: Opacity(
+          opacity: otherUsersOpacity,
+          child: GestureDetector(
+            onTap: () => _openPostMarkerSheet(p),
+            child: pfp != null && pfp.isNotEmpty
+                ? ClipOval(
+              child: Image.network(
+                pfp,
+                width: 40,
+                height: 40,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) =>
+                const CircleAvatar(child: Icon(Icons.person_outline)),
+              ),
+            )
+                : const CircleAvatar(child: Icon(Icons.person_outline)),
+          ),
+        ),
       );
     }).toList();
 
-    final overlayWidgets = <Widget>[];
-    const double overlaySize = 40.0;
-    _overlayOffsets.forEach((author, offset) {
-      final pfp = _pfpCache[author];
-      overlayWidgets.add(Positioned(
-        left: offset.dx - overlaySize / 2,
-        top: offset.dy - overlaySize / 2,
-        width: overlaySize,
-        height: overlaySize,
-        child: GestureDetector(
-          onTap: () {
-            final post = latest[author];
-            if (post != null) _openPostMarkerSheet(post);
-          },
-          child: pfp != null && pfp.isNotEmpty
-              ? ClipOval(child: Image.network(pfp, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person_outline)))
-              : const CircleAvatar(child: Icon(Icons.person_outline)),
+    // current user marker
+    final currentUserMarker = Marker(
+      point: _currentUserLocation,
+      width: 48,
+      height: 48,
+      child: GestureDetector(
+        onTap: () {
+          showModalBottomSheet(
+            context: context,
+            builder: (ctx) => SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Row(
+                  children: [
+                    if (_currentUserPfp != null && _currentUserPfp!.isNotEmpty)
+                      CircleAvatar(backgroundImage: NetworkImage(_currentUserPfp!))
+                    else
+                      const CircleAvatar(child: Icon(Icons.person)),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'This is you (mocked)',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      child: const Text('Close'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+        child: _currentUserPfp != null && _currentUserPfp!.isNotEmpty
+            ? ClipOval(
+          child: Image.network(
+            _currentUserPfp!,
+            width: 48,
+            height: 48,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              width: 48,
+              height: 48,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.grey,
+              ),
+              child: const Icon(Icons.person),
+            ),
+          ),
+        )
+            : Container(
+          width: 48,
+          height: 48,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.green,
+          ),
+          child: const Icon(Icons.person, color: Colors.white),
         ),
-      ));
-    });
+      ),
+    );
+
+    final List<Marker> allMarkers = [...otherUserMarkers, currentUserMarker];
 
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
@@ -407,11 +528,9 @@ class _MapViewState extends State<MapView> {
             options: MapOptions(
               initialCenter: _center,
               initialZoom: _zoom,
-              onTap: (tapPos, latlng) {
-                _handleTap(latlng);
-              },
+              onTap: (tapPos, latlng) => _handleTap(latlng),
               onLongPress: (tapPos, latlng) {
-                _onLongPressAddPin(latlng);
+                if (!_routeMarking) _onLongPressAddPin(latlng);
               },
             ),
             children: [
@@ -421,24 +540,113 @@ class _MapViewState extends State<MapView> {
                 userAgentPackageName: 'com.ride2gather.app',
               ),
               CircleLayer(circles: pinCircles),
-              CircleLayer(circles: userCircles),
+              if (allMarkers.isNotEmpty) MarkerLayer(markers: allMarkers),
+              if (_routePoints.length >= 2)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _routePoints,
+                      color: Colors.purpleAccent, // like in the screenshot
+                      strokeWidth: 5.0,
+                    ),
+                  ],
+                ),
               RichAttributionWidget(
                 attributions: [
                   TextSourceAttribution(
                     '© OpenStreetMap contributors',
-                    onTap: () => launchUrl(
-                      Uri.parse('https://www.openstreetmap.org/copyright'),
-                      mode: LaunchMode.externalApplication,
-                    ),
+                    onTap: () async {
+                      final uri = Uri.parse('https://www.openstreetmap.org/copyright');
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
+                    },
                   ),
                 ],
               ),
             ],
           ),
-          Positioned.fill(
-            child: IgnorePointer(
-              ignoring: false,
-              child: Stack(children: overlayWidgets),
+
+          // ===== RIGHT-SIDE TOOLS =====
+          Positioned(
+            right: 12,
+            top: 90,
+            child: Column(
+              children: [
+                FloatingActionButton(
+                  heroTag: 'ghost_mode',
+                  mini: true,
+                  backgroundColor: _ghostMode ? Colors.white : Colors.black87,
+                  onPressed: () {
+                    setState(() => _ghostMode = !_ghostMode);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Ghost mode ${_ghostMode ? 'on' : 'off'}')),
+                    );
+                  },
+                  child: Icon(Icons.hide_source , color: _ghostMode ? Colors.black : Colors.white),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton(
+                  heroTag: 'route_mark',
+                  mini: true,
+                  backgroundColor: _routeMarking ? Colors.purpleAccent : Colors.black87,
+                  onPressed: () {
+                    setState(() => _routeMarking = !_routeMarking);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(_routeMarking
+                            ? 'Route marking: tap to add points'
+                            : 'Route marking off'),
+                      ),
+                    );
+                  },
+                  child: const Icon(Icons.add_road, color: Colors.white),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton(
+                  heroTag: 'route_clear',
+                  mini: true,
+                  backgroundColor: Colors.black87,
+                  onPressed: _routePoints.isNotEmpty ? _clearRoute : null,
+                  child: const Icon(Icons.clear, color: Colors.white),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton(
+                  heroTag: 'route_done',
+                  mini: true,
+                  backgroundColor: _routePoints.length >= 2 ? Colors.green : Colors.grey,
+                  onPressed: _routePoints.length >= 2
+                      ? () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Route with ${_routePoints.length} points saved (mock)')),
+                    );
+                    setState(() => _routeMarking = false);
+                  }
+                      : null,
+                  child: const Icon(Icons.check, color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+
+          // ===== BOTTOM ACTION CHIPS (Challenges, Add a photo, etc.) =====
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 18,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: const [
+                  _ActionChipCard(icon: Icons.emoji_events_outlined, label: 'Challenges'),
+                  SizedBox(width: 10),
+                  _ActionChipCard(icon: Icons.add_a_photo_outlined, label: 'Add a photo'),
+                  SizedBox(width: 10),
+                  _ActionChipCard(icon: Icons.warning_amber_rounded, label: 'CRASH-LIGHT'),
+                  SizedBox(width: 10),
+                  _ActionChipCard(icon: Icons.settings, label: 'Settings'),
+                ],
+              ),
             ),
           ),
         ],
@@ -447,8 +655,58 @@ class _MapViewState extends State<MapView> {
   }
 }
 
-extension on MapController {
-  get center => null;
+// ===== Small UI helpers =====
 
-  latLngToScreenPoint(LatLng latLng) {}
+class _TripStat extends StatelessWidget {
+  final String label;
+  final String value;
+  const _TripStat({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 2),
+        Text(label, style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11, letterSpacing: 0.8)),
+      ],
+    );
+  }
+}
+
+class _TripDivider extends StatelessWidget {
+  const _TripDivider();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 26,
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+      color: Colors.white24,
+    );
+  }
+}
+
+class _ActionChipCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _ActionChipCard({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.75),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.white, size: 18),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(color: Colors.white)),
+        ],
+      ),
+    );
+  }
 }
